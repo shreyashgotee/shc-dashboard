@@ -176,29 +176,48 @@ export default function App() {
 
   const refresh = async () => { setRefreshing(true); await load(false); setRefreshing(false); };
 
-  // Save workout log
-  const saveWoLog = async (dayIndex, logData) => {
-    const updated = {...woLogs, [dayIndex]: {...(woLogs[dayIndex]||{}), ...logData}};
-    setWoLogs(updated);
-    setSaving(true);
-    await db.upsertWorkoutLog(wk, dayIndex, logData);
-    setSaving(false);
-  };
+  const [dirty, setDirty] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
-  // Save meal log
-  const saveMlLog = async (dayIndex, meals) => {
-    const updated = {...mlLogs, [dayIndex]: {...(mlLogs[dayIndex]||{}), meals}};
-    setMlLogs(updated);
-    setSaving(true);
-    await db.upsertMealLog(wk, dayIndex, meals);
-    setSaving(false);
+  // Local-only updates (no DB writes)
+  const updateWoLog = (dayIndex, logData) => {
+    setWoLogs(prev => ({...prev, [dayIndex]: {...(prev[dayIndex]||{}), ...logData}}));
+    setDirty(true);
   };
-
-  // Save measurements
-  const saveMeas = async (m) => {
+  const updateMlLog = (dayIndex, meals) => {
+    setMlLogs(prev => ({...prev, [dayIndex]: {...(prev[dayIndex]||{}), meals}}));
+    setDirty(true);
+  };
+  const updateMeas = (m) => {
     setMeas(m);
+    setDirty(true);
+  };
+
+  // Single save-all function
+  const saveAll = async () => {
     setSaving(true);
-    await db.upsertMeasurements(wk, m);
+    setSaveMsg("");
+    try {
+      const promises = [];
+      // Save all workout logs that exist
+      Object.entries(woLogs).forEach(([di, log]) => {
+        promises.push(db.upsertWorkoutLog(wk, parseInt(di), log));
+      });
+      // Save all meal logs that exist
+      Object.entries(mlLogs).forEach(([di, log]) => {
+        if (log.meals) promises.push(db.upsertMealLog(wk, parseInt(di), log.meals));
+      });
+      // Save measurements if any field is filled
+      if (meas.weight || meas.bodyFat || meas.waist || meas.chest || meas.arms) {
+        promises.push(db.upsertMeasurements(wk, meas));
+      }
+      await Promise.all(promises);
+      setDirty(false);
+      setSaveMsg("Saved ✓");
+      setTimeout(() => setSaveMsg(""), 3000);
+    } catch(e) {
+      setSaveMsg("Save failed!");
+    }
     setSaving(false);
   };
 
@@ -231,7 +250,8 @@ export default function App() {
           <div style={{color:"#2a2a2a",fontSize:w?11:10}}>Shreyash Health Console · {wk}</div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {saving&&<span style={{color:"#c8ff00",fontSize:9}}>saving...</span>}
+          {saveMsg&&<span style={{color:"#4ade80",fontSize:10}}>{saveMsg}</span>}
+          {dirty&&<button onClick={saveAll} disabled={saving} style={{background:saving?"#333":"#c8ff00",color:saving?"#888":"#000",border:"none",borderRadius:6,padding:"5px 14px",cursor:saving?"wait":"pointer",fontSize:12,fontWeight:700,fontFamily:"'Overpass Mono',monospace"}}>{saving?"Saving...":"Save"}</button>}
           <button onClick={refresh} disabled={refreshing} style={{background:"none",border:"1px solid #222",borderRadius:6,padding:"5px 10px",color:refreshing?"#c8ff00":"#505050",cursor:"pointer",fontSize:14,animation:refreshing?"sp .8s linear infinite":"none"}}>↻</button>
         </div>
       </div>
@@ -267,14 +287,14 @@ export default function App() {
 
         {/* Content */}
         {tab==="w"&&(day===-1
-          ? wp.map((p,i)=><WDay key={i} plan={{...p,day:DAYS[i]}} log={woLogs[i]||{}} onLogChange={d=>saveWoLog(i,d)} s={s} l={l}/>)
-          : wp[day] ? <WDay plan={{...wp[day],day:DAYS[day]}} log={woLogs[day]||{}} onLogChange={d=>saveWoLog(day,d)} s={s} l={l}/> : <div style={{color:"#404040",padding:20}}>No plan for this day</div>
+          ? wp.map((p,i)=><WDay key={i} plan={{...p,day:DAYS[i]}} log={woLogs[i]||{}} onLogChange={d=>updateWoLog(i,d)} s={s} l={l}/>)
+          : wp[day] ? <WDay plan={{...wp[day],day:DAYS[day]}} log={woLogs[day]||{}} onLogChange={d=>updateWoLog(day,d)} s={s} l={l}/> : <div style={{color:"#404040",padding:20}}>No plan for this day</div>
         )}
         {tab==="m"&&(day===-1
-          ? mp.map((p,i)=><MDay key={i} planned={p.meals||[]} logged={mlLogs[i]?.meals} onLogChange={m=>saveMlLog(i,m)} s={s} l={l}/>)
-          : mp[day] ? <MDay planned={mp[day].meals||[]} logged={mlLogs[day]?.meals} onLogChange={m=>saveMlLog(day,m)} s={s} l={l}/> : <div style={{color:"#404040",padding:20}}>No meal plan for this day</div>
+          ? mp.map((p,i)=><MDay key={i} planned={p.meals||[]} logged={mlLogs[i]?.meals} onLogChange={m=>updateMlLog(i,m)} s={s} l={l}/>)
+          : mp[day] ? <MDay planned={mp[day].meals||[]} logged={mlLogs[day]?.meals} onLogChange={m=>updateMlLog(day,m)} s={s} l={l}/> : <div style={{color:"#404040",padding:20}}>No meal plan for this day</div>
         )}
-        {tab==="b"&&<Body data={meas} onChange={saveMeas} s={s} l={l}/>}
+        {tab==="b"&&<Body data={meas} onChange={updateMeas} s={s} l={l}/>}
       </>}
 
       {/* Week nav */}
