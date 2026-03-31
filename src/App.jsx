@@ -26,14 +26,19 @@ const sty=l=>{const w=isW(l);return{
 function WDay({plan,log,onLogChange,s,l}){
   const[sa,sSa]=useState(null),[fm,sFm]=useState({}),[cd,sCd]=useState(null);
   const w=isW(l);
-  const data = {...plan,...log}; // merge plan + log
-  const exercises = Array.isArray(log.exercises) && log.exercises.length ? log.exercises : Array.isArray(plan.exercises) ? plan.exercises.map(e=>({...e,sets:[],completed:false})) : [];
-  const cardio = Array.isArray(log.cardio) && log.cardio.length ? log.cardio : Array.isArray(plan.cardio) ? plan.cardio.map(c=>({...c,completed:false})) : [];
+  
+  // If log has exercises, use them. Otherwise initialize from plan.
+  // Once ANY change is made, the full state lives in the log.
+  const hasLog = log.exercises !== undefined;
+  const exercises = hasLog ? (Array.isArray(log.exercises) ? log.exercises : []) : (Array.isArray(plan.exercises) ? plan.exercises.map(e=>({...e,sets:[],completed:false})) : []);
+  const hasCardioLog = log.cardio !== undefined;
+  const cardio = hasCardioLog ? (Array.isArray(log.cardio) ? log.cardio : []) : (Array.isArray(plan.cardio) ? plan.cardio.map(c=>({...c,completed:false})) : []);
   const usedMicro = log.usedMicro || false;
   const completed = log.completed || false;
   const notes = log.notes ?? plan.notes ?? "";
   const dayDone = usedMicro || completed || (exercises.length>0 && exercises.every(e=>e.completed));
 
+  // Every save snapshots the FULL current state into the log
   const save = (updates) => onLogChange({exercises,cardio,usedMicro,completed,notes,...updates});
   const uE=(i,u)=>{const ex=[...exercises];ex[i]={...ex[i],...u};save({exercises:ex});};
   const uS=(ei,si,f,v)=>{const ex=[...exercises];ex[ei]={...ex[ei],sets:ex[ei].sets.map((x,j)=>j===si?{...x,[f]:v}:x)};save({exercises:ex});};
@@ -163,7 +168,13 @@ export default function App() {
         db.getMeasurements(wk),
       ]);
       setPlan(p);
-      const wMap = {}; wl.forEach(x => wMap[x.day_index] = x); setWoLogs(wMap);
+      const wMap = {}; wl.forEach(x => wMap[x.day_index] = {
+        exercises: x.exercises || [],
+        cardio: x.cardio || [],
+        usedMicro: x.used_micro || false,
+        completed: x.completed || false,
+        notes: x.notes || "",
+      }); setWoLogs(wMap);
       const mMap = {}; ml.forEach(x => mMap[x.day_index] = x); setMlLogs(mMap);
       if(m) setMeas({weight:m.weight||"",bodyFat:m.body_fat||"",waist:m.waist||"",chest:m.chest||"",arms:m.arms||"",date:m.measured_at||""});
       else setMeas({weight:"",bodyFat:"",waist:"",chest:"",arms:"",date:""});

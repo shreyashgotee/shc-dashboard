@@ -39,7 +39,15 @@ export const db = {
     const res = await fetch(api('workout_logs'), {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'return=representation,resolution=merge-duplicates' },
-      body: JSON.stringify({ week_id: weekId, day_index: dayIndex, ...log }),
+      body: JSON.stringify({
+        week_id: weekId,
+        day_index: dayIndex,
+        exercises: log.exercises || [],
+        cardio: log.cardio || [],
+        used_micro: log.usedMicro || false,
+        completed: log.completed || false,
+        notes: log.notes || '',
+      }),
     });
     const data = await res.json();
     return data?.[0] || null;
