@@ -36,21 +36,31 @@ export const db = {
   },
 
   async upsertWorkoutLog(weekId, dayIndex, log) {
-    const res = await fetch(api('workout_logs'), {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation,resolution=merge-duplicates' },
-      body: JSON.stringify({
-        week_id: weekId,
-        day_index: dayIndex,
-        exercises: log.exercises || [],
-        cardio: log.cardio || [],
-        used_micro: log.usedMicro || false,
-        completed: log.completed || false,
-        notes: log.notes || '',
-      }),
+    const body = {
+      week_id: weekId,
+      day_index: dayIndex,
+      exercises: log.exercises || [],
+      cardio: log.cardio || [],
+      used_micro: log.usedMicro || false,
+      completed: log.completed || false,
+      notes: log.notes || '',
+    };
+    // Try PATCH first (update existing)
+    const patchRes = await fetch(api(`workout_logs?week_id=eq.${weekId}&day_index=eq.${dayIndex}`), {
+      method: 'PATCH',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
     });
-    const data = await res.json();
-    return data?.[0] || null;
+    const patchData = await patchRes.json();
+    if (Array.isArray(patchData) && patchData.length > 0) return patchData[0];
+    // No existing row — POST new
+    const postRes = await fetch(api('workout_logs'), {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    const postData = await postRes.json();
+    return postData?.[0] || null;
   },
 
   // ─── MEAL LOGS ───
@@ -61,13 +71,21 @@ export const db = {
   },
 
   async upsertMealLog(weekId, dayIndex, meals) {
-    const res = await fetch(api('meal_logs'), {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation,resolution=merge-duplicates' },
-      body: JSON.stringify({ week_id: weekId, day_index: dayIndex, meals }),
+    const body = { week_id: weekId, day_index: dayIndex, meals };
+    const patchRes = await fetch(api(`meal_logs?week_id=eq.${weekId}&day_index=eq.${dayIndex}`), {
+      method: 'PATCH',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
     });
-    const data = await res.json();
-    return data?.[0] || null;
+    const patchData = await patchRes.json();
+    if (Array.isArray(patchData) && patchData.length > 0) return patchData[0];
+    const postRes = await fetch(api('meal_logs'), {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    const postData = await postRes.json();
+    return postData?.[0] || null;
   },
 
   // ─── MEASUREMENTS ───
@@ -78,12 +96,20 @@ export const db = {
   },
 
   async upsertMeasurements(weekId, m) {
-    const res = await fetch(api('measurements'), {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation,resolution=merge-duplicates' },
-      body: JSON.stringify({ week_id: weekId, weight: m.weight, body_fat: m.bodyFat, waist: m.waist, chest: m.chest, arms: m.arms, measured_at: m.date || null }),
+    const body = { week_id: weekId, weight: m.weight, body_fat: m.bodyFat, waist: m.waist, chest: m.chest, arms: m.arms, measured_at: m.date || null };
+    const patchRes = await fetch(api(`measurements?week_id=eq.${weekId}`), {
+      method: 'PATCH',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
     });
-    const data = await res.json();
-    return data?.[0] || null;
+    const patchData = await patchRes.json();
+    if (Array.isArray(patchData) && patchData.length > 0) return patchData[0];
+    const postRes = await fetch(api('measurements'), {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    const postData = await postRes.json();
+    return postData?.[0] || null;
   },
 };
