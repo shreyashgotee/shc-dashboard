@@ -15,20 +15,17 @@ const emptyMeals = () => [{slot:"Breakfast (8am)",planned:"",actual:"",confirmed
 function useLayout(){ const[w,sW]=useState(window.innerWidth); useEffect(()=>{const h=()=>sW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w>=1024?"D":w>=600?"T":"P";}
 const isW=l=>l!=="P";
 const sty=l=>{const w=isW(l);return{
-  i:{background:"#111",border:"1px solid #262626",borderRadius:6,color:"#e0e0e0",fontFamily:"'Overpass Mono',monospace",width:"100%",boxSizing:"border-box",padding:w?"8px 12px":"6px 8px",fontSize:w?13:12,outline:"none"},
-  c:{background:"#0e0e0e",borderRadius:12,border:"1px solid #1c1c1c",padding:w?16:10,marginBottom:w?12:8},
-  lb:{color:"#505050",fontSize:w?11:10,marginBottom:3,display:"block",fontWeight:600},
-  b:{borderRadius:6,border:"none",cursor:"pointer",fontWeight:700,fontFamily:"'Overpass Mono',monospace",padding:w?"8px 16px":"6px 12px",fontSize:w?12:11},
-  bg:{borderRadius:6,border:"1px solid #262626",cursor:"pointer",background:"transparent",fontFamily:"'Overpass Mono',monospace",color:"#606060",padding:w?"6px 14px":"4px 10px",fontSize:w?12:11},
+  i:{background:"#111",border:"1px solid #262626",borderRadius:6,color:"#e0e0e0",fontFamily:"'Overpass Mono',monospace",width:"100%",boxSizing:"border-box",padding:w?"10px 14px":"8px 10px",fontSize:w?15:14,outline:"none"},
+  c:{background:"#0e0e0e",borderRadius:12,border:"1px solid #1c1c1c",padding:w?18:12,marginBottom:w?14:10},
+  lb:{color:"#606060",fontSize:w?13:12,marginBottom:4,display:"block",fontWeight:600},
+  b:{borderRadius:6,border:"none",cursor:"pointer",fontWeight:700,fontFamily:"'Overpass Mono',monospace",padding:w?"10px 18px":"8px 14px",fontSize:w?14:13},
+  bg:{borderRadius:6,border:"1px solid #262626",cursor:"pointer",background:"transparent",fontFamily:"'Overpass Mono',monospace",color:"#606060",padding:w?"8px 16px":"6px 12px",fontSize:w?14:13},
 };};
 
 // ─── WORKOUT DAY COMPONENT ───
 function WDay({plan,log,onLogChange,s,l}){
   const[sa,sSa]=useState(null),[fm,sFm]=useState({}),[cd,sCd]=useState(null);
   const w=isW(l);
-  
-  // If log has exercises, use them. Otherwise initialize from plan.
-  // Once ANY change is made, the full state lives in the log.
   const hasLog = log.exercises !== undefined;
   const exercises = hasLog ? (Array.isArray(log.exercises) ? log.exercises : []) : (Array.isArray(plan.exercises) ? plan.exercises.map(e=>({...e,sets:[],completed:false})) : []);
   const hasCardioLog = log.cardio !== undefined;
@@ -38,7 +35,6 @@ function WDay({plan,log,onLogChange,s,l}){
   const notes = log.notes ?? plan.notes ?? "";
   const dayDone = usedMicro || completed || (exercises.length>0 && exercises.every(e=>e.completed));
 
-  // Every save snapshots the FULL current state into the log
   const save = (updates) => onLogChange({exercises,cardio,usedMicro,completed,notes,...updates});
   const uE=(i,u)=>{const ex=[...exercises];ex[i]={...ex[i],...u};save({exercises:ex});};
   const uS=(ei,si,f,v)=>{const ex=[...exercises];ex[ei]={...ex[ei],sets:ex[ei].sets.map((x,j)=>j===si?{...x,[f]:v}:x)};save({exercises:ex});};
@@ -46,66 +42,66 @@ function WDay({plan,log,onLogChange,s,l}){
   const aC=()=>{if(!fm.ct)return;save({cardio:[...cardio,{type:fm.ct,duration:fm.cd||"",distance:fm.ci||"",completed:false,notes:""}]});sFm({});sSa(null);};
   const dl=(t,i)=>{const k=`${t}${i}`;if(cd===k){if(t==="e")save({exercises:exercises.filter((_,j)=>j!==i)});else save({cardio:cardio.filter((_,j)=>j!==i)});sCd(null);}else{sCd(k);setTimeout(()=>sCd(c=>c===k?null:c),3000);}};
   const kd=(e,f)=>{if(e.key==="Enter"){e.preventDefault();f();}};
+  const delBtn=(active)=>({background:active?"#ef4444":"#1a1a1a",border:active?"1px solid #ef4444":"1px solid #333",borderRadius:6,cursor:"pointer",fontSize:13,color:active?"#fff":"#888",fontFamily:"'Overpass Mono',monospace",padding:"4px 10px",fontWeight:700});
 
   return(<div style={s.c}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-      <div><span style={{color:"#c8ff00",fontSize:w?16:14,fontWeight:800}}>{plan.day||DAYS[plan.dayIndex||0]}</span>{plan.focus&&<span style={{color:"#606060",fontSize:w?13:11,marginLeft:8}}>— {plan.focus}</span>}</div>
-      <div style={{display:"flex",gap:6,alignItems:"center"}}>{dayDone&&!usedMicro&&<span style={{color:"#4ade80",fontSize:11}}>✓ Done</span>}{usedMicro&&<span style={{color:"#fbbf24",fontSize:11}}>⚡ Micro</span>}</div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div><span style={{color:"#c8ff00",fontSize:w?18:16,fontWeight:800}}>{plan.day||DAYS[plan.dayIndex||0]}</span>{plan.focus&&<span style={{color:"#606060",fontSize:w?15:13,marginLeft:8}}>— {plan.focus}</span>}</div>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>{dayDone&&!usedMicro&&<span style={{color:"#4ade80",fontSize:14}}>✓ Done</span>}{usedMicro&&<span style={{color:"#fbbf24",fontSize:14}}>⚡ Micro</span>}</div>
     </div>
-    {plan.notes&&<div style={{color:"#4a4a4a",fontSize:11,marginBottom:8,fontStyle:"italic"}}>{plan.notes}</div>}
-    {plan.microOption&&<div style={{background:"#141408",border:"1px solid #2a2a00",borderRadius:8,padding:w?10:8,marginBottom:10,fontSize:w?12:11}}><span style={{color:"#fbbf24"}}>⚡ Streak Saver: </span><span style={{color:"#909090"}}>{plan.microOption}</span>
-      <button onClick={()=>save({usedMicro:!usedMicro,completed:!usedMicro||completed})} style={{...s.b,marginLeft:8,padding:"3px 10px",fontSize:10,background:usedMicro?"#fbbf24":"#262626",color:usedMicro?"#000":"#606060"}}>{usedMicro?"Used ✓":"Use This"}</button></div>}
+    {plan.notes&&<div style={{color:"#555",fontSize:13,marginBottom:10,fontStyle:"italic"}}>{plan.notes}</div>}
+    {plan.microOption&&<div style={{background:"#141408",border:"1px solid #2a2a00",borderRadius:8,padding:w?12:10,marginBottom:12,fontSize:w?14:13}}><span style={{color:"#fbbf24"}}>⚡ Streak Saver: </span><span style={{color:"#909090"}}>{plan.microOption}</span>
+      <button onClick={()=>save({usedMicro:!usedMicro,completed:!usedMicro||completed})} style={{...s.b,marginLeft:10,padding:"5px 14px",fontSize:12,background:usedMicro?"#fbbf24":"#262626",color:usedMicro?"#000":"#606060"}}>{usedMicro?"Used ✓":"Use This"}</button></div>}
 
-    {exercises.map((ex,ei)=><div key={ei} style={{background:"#0a0a14",borderRadius:8,padding:w?12:8,marginBottom:8,border:ex.completed?"1px solid #1a2a1a":"1px solid #181825"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-          <input type="checkbox" checked={ex.completed||false} onChange={e=>uE(ei,{completed:e.target.checked})} style={{accentColor:"#4ade80",width:w?16:14,height:w?16:14,cursor:"pointer",flexShrink:0}}/>
-          <span style={{color:ex.completed?"#4ade80":"#d0d0d0",fontSize:w?14:12,fontWeight:700,textDecoration:ex.completed?"line-through":"none",opacity:ex.completed?.6:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+    {exercises.map((ex,ei)=><div key={ei} style={{background:"#0a0a14",borderRadius:10,padding:w?14:10,marginBottom:10,border:ex.completed?"1px solid #1a2a1a":"1px solid #181825"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
+          <input type="checkbox" checked={ex.completed||false} onChange={e=>uE(ei,{completed:e.target.checked})} style={{accentColor:"#4ade80",width:w?20:18,height:w?20:18,cursor:"pointer",flexShrink:0}}/>
+          <span style={{color:ex.completed?"#4ade80":"#d0d0d0",fontSize:w?16:15,fontWeight:700,textDecoration:ex.completed?"line-through":"none",opacity:ex.completed?.6:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
         </div>
-        <button onClick={()=>dl("e",ei)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:cd===`e${ei}`?"#ef4444":"#333",fontFamily:"monospace"}}>{cd===`e${ei}`?"del?":"✕"}</button>
+        <button onClick={()=>dl("e",ei)} style={delBtn(cd===`e${ei}`)}>{cd===`e${ei}`?"Delete?":"✕"}</button>
       </div>
-      {ex.targetSets&&<div style={{color:"#404040",fontSize:10,marginBottom:6,paddingLeft:w?24:22}}>Target: {ex.targetSets}×{ex.targetReps}{ex.rpe?` @ RPE ${ex.rpe}`:""}</div>}
-      {ex.sets?.length>0&&<div style={{paddingLeft:w?24:22}}>
-        <div style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr 24px 20px",gap:4,marginBottom:4,fontSize:10,color:"#404040"}}><span>#</span><span>Reps</span><span>Weight</span><span>✓</span><span></span></div>
-        {ex.sets.map((z,si)=><div key={si} style={{display:"grid",gridTemplateColumns:"28px 1fr 1fr 24px 20px",gap:4,marginBottom:3,alignItems:"center"}}>
-          <span style={{color:"#404040",fontSize:11}}>{si+1}</span>
-          <input value={z.reps} onChange={e=>uS(ei,si,"reps",e.target.value)} placeholder="—" style={{...s.i,padding:"4px 6px"}}/>
-          <input value={z.weight} onChange={e=>uS(ei,si,"weight",e.target.value)} placeholder="lbs" style={{...s.i,padding:"4px 6px"}}/>
-          <input type="checkbox" checked={z.done||false} onChange={e=>uS(ei,si,"done",e.target.checked)} style={{accentColor:"#4ade80",cursor:"pointer"}}/>
-          <button onClick={()=>uE(ei,{sets:ex.sets.filter((_,j)=>j!==si)})} style={{background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:10}}>✕</button>
+      {ex.targetSets&&<div style={{color:"#505050",fontSize:13,marginBottom:8,paddingLeft:w?30:28}}>Target: {ex.targetSets}×{ex.targetReps}{ex.rpe?` @ RPE ${ex.rpe}`:""}</div>}
+      {ex.sets?.length>0&&<div style={{paddingLeft:w?30:28}}>
+        <div style={{display:"grid",gridTemplateColumns:"30px 1fr 1fr 24px",gap:6,marginBottom:6,fontSize:13,color:"#505050"}}><span>#</span><span>Reps</span><span>Weight</span><span></span></div>
+        {ex.sets.map((z,si)=><div key={si} style={{display:"grid",gridTemplateColumns:"30px 1fr 1fr 24px",gap:6,marginBottom:5,alignItems:"center"}}>
+          <span style={{color:"#505050",fontSize:14}}>{si+1}</span>
+          <input value={z.reps} onChange={e=>uS(ei,si,"reps",e.target.value)} placeholder="—" style={{...s.i,padding:"6px 10px"}}/>
+          <input value={z.weight} onChange={e=>uS(ei,si,"weight",e.target.value)} placeholder="lbs" style={{...s.i,padding:"6px 10px"}}/>
+          <button onClick={()=>uE(ei,{sets:ex.sets.filter((_,j)=>j!==si)})} style={{background:"none",border:"1px solid #333",borderRadius:4,color:"#777",cursor:"pointer",fontSize:13,padding:"3px 7px"}}>✕</button>
         </div>)}
       </div>}
-      <div style={{paddingLeft:w?24:22,marginTop:6}}><button onClick={()=>uE(ei,{sets:[...(ex.sets||[]),{reps:"",weight:"",done:false}]})} style={{...s.bg,padding:"2px 8px",fontSize:10}}>+ set</button></div>
-      <div style={{paddingLeft:w?24:22,marginTop:6}}><input value={ex.notes||""} onChange={e=>uE(ei,{notes:e.target.value})} placeholder="Notes..." style={{...s.i,padding:"4px 8px",fontSize:11,background:"#080810"}}/></div>
+      <div style={{paddingLeft:w?30:28,marginTop:8}}><button onClick={()=>uE(ei,{sets:[...(ex.sets||[]),{reps:"",weight:""}]})} style={{...s.bg,padding:"5px 14px"}}>+ set</button></div>
+      <div style={{paddingLeft:w?30:28,marginTop:8}}><input value={ex.notes||""} onChange={e=>uE(ei,{notes:e.target.value})} placeholder="Notes..." style={{...s.i,padding:"6px 10px",background:"#080810"}}/></div>
     </div>)}
 
-    {cardio.map((c,ci)=><div key={ci} style={{background:"#0a120a",borderRadius:8,padding:w?10:8,marginBottom:8,border:c.completed?"1px solid #1a2a1a":"1px solid #152015"}}>
+    {cardio.map((c,ci)=><div key={ci} style={{background:"#0a120a",borderRadius:10,padding:w?12:10,marginBottom:10,border:c.completed?"1px solid #1a2a1a":"1px solid #152015"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
-          <input type="checkbox" checked={c.completed||false} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,completed:e.target.checked}:x)})} style={{accentColor:"#4ade80",cursor:"pointer"}}/>
-          <span style={{color:"#4ade80",fontSize:w?13:12}}>{c.type}</span>{c.duration&&<span style={{color:"#505050",fontSize:11}}>{c.duration}min</span>}
+        <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+          <input type="checkbox" checked={c.completed||false} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,completed:e.target.checked}:x)})} style={{accentColor:"#4ade80",width:w?20:18,height:w?20:18,cursor:"pointer"}}/>
+          <span style={{color:"#4ade80",fontSize:w?15:14}}>{c.type}</span>{c.duration&&<span style={{color:"#606060",fontSize:13}}>{c.duration}min</span>}
         </div>
-        <button onClick={()=>dl("c",ci)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:cd===`c${ci}`?"#ef4444":"#333"}}>{cd===`c${ci}`?"del?":"✕"}</button>
+        <button onClick={()=>dl("c",ci)} style={delBtn(cd===`c${ci}`)}>{cd===`c${ci}`?"Delete?":"✕"}</button>
       </div>
-      <input value={c.notes||""} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,notes:e.target.value}:x)})} placeholder="Cardio notes..." style={{...s.i,padding:"4px 8px",fontSize:11,background:"#081008",marginTop:6}}/>
+      <input value={c.notes||""} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,notes:e.target.value}:x)})} placeholder="Cardio notes..." style={{...s.i,padding:"6px 10px",background:"#081008",marginTop:8}}/>
     </div>)}
 
-    <div style={{display:"flex",gap:6,marginTop:10}}>
+    <div style={{display:"flex",gap:8,marginTop:12}}>
       <button onClick={()=>sSa(sa==="e"?null:"e")} style={s.bg}>+ Exercise</button>
       <button onClick={()=>sSa(sa==="c"?null:"c")} style={s.bg}>+ Cardio</button>
     </div>
-    {sa==="e"&&<div style={{background:"#111",borderRadius:8,padding:10,marginTop:8,display:"flex",gap:6,flexWrap:"wrap",alignItems:"end"}}>
+    {sa==="e"&&<div style={{background:"#111",borderRadius:8,padding:12,marginTop:10,display:"flex",gap:8,flexWrap:"wrap",alignItems:"end"}}>
       <div style={{flex:"2 1 140px"}}><label style={s.lb}>Exercise</label><input value={fm.n||""} onChange={e=>sFm({...fm,n:e.target.value})} onKeyDown={e=>kd(e,aE)} autoFocus style={s.i}/></div>
       <div style={{flex:"1 1 60px"}}><label style={s.lb}>Sets</label><input value={fm.s||""} onChange={e=>sFm({...fm,s:e.target.value})} onKeyDown={e=>kd(e,aE)} style={s.i}/></div>
       <div style={{flex:"1 1 60px"}}><label style={s.lb}>Reps</label><input value={fm.r||""} onChange={e=>sFm({...fm,r:e.target.value})} onKeyDown={e=>kd(e,aE)} style={s.i}/></div>
       <div style={{flex:"1 1 50px"}}><label style={s.lb}>RPE</label><input value={fm.p||""} onChange={e=>sFm({...fm,p:e.target.value})} onKeyDown={e=>kd(e,aE)} style={s.i}/></div>
       <button onClick={aE} style={{...s.b,background:"#c8ff00",color:"#000"}}>Add</button></div>}
-    {sa==="c"&&<div style={{background:"#111",borderRadius:8,padding:10,marginTop:8,display:"flex",gap:6,flexWrap:"wrap",alignItems:"end"}}>
+    {sa==="c"&&<div style={{background:"#111",borderRadius:8,padding:12,marginTop:10,display:"flex",gap:8,flexWrap:"wrap",alignItems:"end"}}>
       <div style={{flex:"2 1 120px"}}><label style={s.lb}>Type</label><input value={fm.ct||""} onChange={e=>sFm({...fm,ct:e.target.value})} onKeyDown={e=>kd(e,aC)} autoFocus style={s.i}/></div>
       <div style={{flex:"1 1 60px"}}><label style={s.lb}>Min</label><input value={fm.cd||""} onChange={e=>sFm({...fm,cd:e.target.value})} onKeyDown={e=>kd(e,aC)} style={s.i}/></div>
       <div style={{flex:"1 1 70px"}}><label style={s.lb}>Dist</label><input value={fm.ci||""} onChange={e=>sFm({...fm,ci:e.target.value})} onKeyDown={e=>kd(e,aC)} style={s.i}/></div>
       <button onClick={aC} style={{...s.b,background:"#4ade80",color:"#000"}}>Add</button></div>}
-    <textarea placeholder="Day notes..." value={notes} onChange={e=>save({notes:e.target.value})} style={{...s.i,width:"100%",marginTop:10,minHeight:36,resize:"vertical",boxSizing:"border-box"}}/>
+    <textarea placeholder="Day notes..." value={notes} onChange={e=>save({notes:e.target.value})} style={{...s.i,width:"100%",marginTop:12,minHeight:40,resize:"vertical",boxSizing:"border-box"}}/>
   </div>);
 }
 
@@ -116,15 +112,15 @@ function MDay({planned:rawPlanned,logged,onLogChange,s,l}){
   const meals = planned.map((p,i)=>{const lg=logged?.[i]||{}; return{...p,...lg,planned:p.planned};});
   const up=(i,f,v)=>{const m=[...meals.map(x=>({actual:x.actual||"",confirmed:x.confirmed||false,notes:x.notes||""}))];m[i]={...m[i],[f]:v};onLogChange(m);};
   return(<div style={s.c}>
-    <div style={{color:"#c8ff00",fontSize:w?16:14,fontWeight:800,marginBottom:10}}>{planned[0]?.day||""}</div>
-    {meals.map((m,i)=><div key={i} style={{background:m.confirmed?"#0a120a":"#0a0a14",borderRadius:8,padding:w?12:8,marginBottom:8,border:m.confirmed?"1px solid #1a2a1a":"1px solid #181825"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-        <span style={{color:"#707070",fontSize:w?12:11,fontWeight:700}}>{m.slot}</span>
-        <button onClick={()=>up(i,"confirmed",!m.confirmed)} style={{...s.b,padding:"3px 10px",fontSize:10,background:m.confirmed?"#4ade80":"#262626",color:m.confirmed?"#000":"#606060"}}>{m.confirmed?"Ate ✓":"Confirm"}</button>
+    <div style={{color:"#c8ff00",fontSize:w?18:16,fontWeight:800,marginBottom:12}}>{planned[0]?.day||""}</div>
+    {meals.map((m,i)=><div key={i} style={{background:m.confirmed?"#0a120a":"#0a0a14",borderRadius:10,padding:w?14:10,marginBottom:10,border:m.confirmed?"1px solid #1a2a1a":"1px solid #181825"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{color:"#808080",fontSize:w?14:13,fontWeight:700}}>{m.slot}</span>
+        <button onClick={()=>up(i,"confirmed",!m.confirmed)} style={{...s.b,padding:"5px 14px",fontSize:12,background:m.confirmed?"#4ade80":"#262626",color:m.confirmed?"#000":"#606060"}}>{m.confirmed?"Ate ✓":"Confirm"}</button>
       </div>
-      {m.planned&&<div style={{color:"#909090",fontSize:w?12:11,marginBottom:6,padding:"6px 8px",background:"#080814",borderRadius:6}}><span style={{color:"#404040",fontSize:10}}>PLAN → </span>{m.planned}</div>}
+      {m.planned&&<div style={{color:"#909090",fontSize:w?14:13,marginBottom:8,padding:"8px 10px",background:"#080814",borderRadius:6}}><span style={{color:"#505050",fontSize:12}}>PLAN → </span>{m.planned}</div>}
       <input value={m.actual||""} onChange={e=>up(i,"actual",e.target.value)} placeholder={m.planned?"What I actually ate (blank = followed plan)":"What I ate..."} style={s.i}/>
-      <input value={m.notes||""} onChange={e=>up(i,"notes",e.target.value)} placeholder="Meal notes..." style={{...s.i,marginTop:4,fontSize:11,background:"#080810"}}/>
+      <input value={m.notes||""} onChange={e=>up(i,"notes",e.target.value)} placeholder="Meal notes..." style={{...s.i,marginTop:6,background:"#080810"}}/>
     </div>)}
   </div>);
 }
@@ -133,7 +129,7 @@ function MDay({planned:rawPlanned,logged,onLogChange,s,l}){
 function Body({data,onChange,s,l}){
   const w=isW(l);
   return(<div style={s.c}>
-    <div style={{color:"#c8ff00",fontSize:w?16:14,fontWeight:800,marginBottom:14}}>Body Measurements</div>
+    <div style={{color:"#c8ff00",fontSize:w?18:16,fontWeight:800,marginBottom:16}}>Body Measurements</div>
     <div style={{display:"grid",gridTemplateColumns:w?"1fr 1fr 1fr":"1fr 1fr",gap:w?12:8}}>
       {[["weight","Weight (lbs)","⚖️"],["bodyFat","Body Fat %","📊"],["waist","Waist (in)","📏"],["chest","Chest (in)","📐"],["arms","Arms (in)","💪"]].map(([k,lb,ic])=>
         <div key={k}><label style={s.lb}>{ic} {lb}</label><input value={data[k]||""} onChange={e=>onChange({...data,[k]:e.target.value})} style={s.i}/></div>)}
