@@ -31,7 +31,8 @@ export const db = {
   // ─── WORKOUT LOGS ───
   async getWorkoutLogs(weekId) {
     const res = await fetch(api(`workout_logs?week_id=eq.${weekId}&select=*&order=day_index`), { headers });
-    return await res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   },
 
   async upsertWorkoutLog(weekId, dayIndex, log) {
@@ -47,7 +48,8 @@ export const db = {
   // ─── MEAL LOGS ───
   async getMealLogs(weekId) {
     const res = await fetch(api(`meal_logs?week_id=eq.${weekId}&select=*&order=day_index`), { headers });
-    return await res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   },
 
   async upsertMealLog(weekId, dayIndex, meals) {

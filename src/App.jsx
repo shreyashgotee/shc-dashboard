@@ -27,8 +27,8 @@ function WDay({plan,log,onLogChange,s,l}){
   const[sa,sSa]=useState(null),[fm,sFm]=useState({}),[cd,sCd]=useState(null);
   const w=isW(l);
   const data = {...plan,...log}; // merge plan + log
-  const exercises = log.exercises?.length ? log.exercises : plan.exercises?.map(e=>({...e,sets:[],completed:false})) || [];
-  const cardio = log.cardio?.length ? log.cardio : plan.cardio?.map(c=>({...c,completed:false})) || [];
+  const exercises = Array.isArray(log.exercises) && log.exercises.length ? log.exercises : Array.isArray(plan.exercises) ? plan.exercises.map(e=>({...e,sets:[],completed:false})) : [];
+  const cardio = Array.isArray(log.cardio) && log.cardio.length ? log.cardio : Array.isArray(plan.cardio) ? plan.cardio.map(c=>({...c,completed:false})) : [];
   const usedMicro = log.usedMicro || false;
   const completed = log.completed || false;
   const notes = log.notes ?? plan.notes ?? "";
@@ -105,8 +105,9 @@ function WDay({plan,log,onLogChange,s,l}){
 }
 
 // ─── MEAL DAY ───
-function MDay({planned,logged,onLogChange,s,l}){
+function MDay({planned:rawPlanned,logged,onLogChange,s,l}){
   const w=isW(l);
+  const planned = Array.isArray(rawPlanned) ? rawPlanned : [];
   const meals = planned.map((p,i)=>{const lg=logged?.[i]||{}; return{...p,...lg,planned:p.planned};});
   const up=(i,f,v)=>{const m=[...meals.map(x=>({actual:x.actual||"",confirmed:x.confirmed||false,notes:x.notes||""}))];m[i]={...m[i],[f]:v};onLogChange(m);};
   return(<div style={s.c}>
@@ -202,8 +203,8 @@ export default function App() {
   };
 
   // Compute stats
-  const wp = plan?.workout_plan || [];
-  const mp = plan?.meal_plan || [];
+  const wp = Array.isArray(plan?.workout_plan) ? plan.workout_plan : [];
+  const mp = Array.isArray(plan?.meal_plan) ? plan.meal_plan : [];
   const streak = DAYS.reduce((a,_,i)=>{
     const p = wp[i]||{exercises:[]}; const lg = woLogs[i]||{};
     const ex = lg.exercises?.length ? lg.exercises : p.exercises||[];
