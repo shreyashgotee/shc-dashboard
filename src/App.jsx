@@ -137,16 +137,19 @@ function WDay({plan,log,onLogChange,s,l,t}){
       </div>
       {ex.targetSets&&<div style={{color:t.tf,fontSize:13,marginBottom:8,paddingLeft:w?30:28}}>{"Target: "+ex.targetSets+"x"+ex.targetReps+(ex.rpe?" @ RPE "+ex.rpe:"")}</div>}
       {ex.sets&&ex.sets.length>0&&<div style={{paddingLeft:w?30:28}}>
-        <div style={{display:"grid",gridTemplateColumns:"30px 1fr 1fr 24px",gap:6,marginBottom:6,fontSize:13,color:t.tf}}><span>#</span><span>Reps</span><span>Weight</span><span></span></div>
+        <div style={{display:"grid",gridTemplateColumns:"30px 1fr 1fr 24px",gap:6,marginBottom:6,fontSize:13,color:t.tf}}><span>#</span><span>{(ex.sets[0]?.mode==="time")?"Time":"Reps"}</span><span>Weight</span><span></span></div>
         {ex.sets.map((z,si)=><div key={si} style={{display:"grid",gridTemplateColumns:"30px 1fr 1fr 24px",gap:6,marginBottom:5,alignItems:"center"}}>
           <span style={{color:t.tf,fontSize:14}}>{si+1}</span>
-          <input value={z.reps||""} onChange={e=>uS(ei,si,"reps",e.target.value)} placeholder="-" style={{...s.i,padding:"6px 10px"}}/>
+          <div style={{position:"relative"}}>
+            <input value={(z.mode==="time"?z.time:z.reps)||""} onChange={e=>{if(z.mode==="time")uS(ei,si,"time",e.target.value);else uS(ei,si,"reps",e.target.value);}} placeholder={z.mode==="time"?"sec":"-"} style={{...s.i,padding:"6px 10px",paddingRight:36}}/>
+            <button onClick={()=>uS(ei,si,"mode",z.mode==="time"?"reps":"time")} style={{position:"absolute",right:4,top:"50%",transform:"translateY(-50%)",background:t.gl,border:"1px solid "+t.bm,borderRadius:4,color:z.mode==="time"?t.yellow:t.tm,cursor:"pointer",fontSize:9,padding:"2px 4px",fontFamily:"'Overpass Mono',monospace"}}>{z.mode==="time"?"T":"R"}</button>
+          </div>
           <input value={z.weight||""} onChange={e=>uS(ei,si,"weight",e.target.value)} placeholder="lbs" style={{...s.i,padding:"6px 10px"}}/>
           <button onClick={()=>uE(ei,{sets:ex.sets.filter((_,j)=>j!==si)})} style={{background:"none",border:"1px solid "+t.dB,borderRadius:4,color:t.dc,cursor:"pointer",fontSize:13,padding:"3px 7px"}}>X</button>
         </div>)}
       </div>}
-      <div style={{paddingLeft:w?30:28,marginTop:8}}><button onClick={()=>uE(ei,{sets:[...(ex.sets||[]),{reps:"",weight:""}]})} style={{...s.bg,padding:"5px 14px"}}>+ set</button></div>
-      <div style={{paddingLeft:w?30:28,marginTop:8}}><input value={ex.notes||""} onChange={e=>uE(ei,{notes:e.target.value})} placeholder="Notes..." style={{...s.i,padding:"6px 10px"}}/></div>
+      <div style={{paddingLeft:w?30:28,marginTop:8}}><button onClick={()=>uE(ei,{sets:[...(ex.sets||[]),{reps:"",weight:"",mode:"reps"}]})} style={{...s.bg,padding:"5px 14px"}}>+ set</button></div>
+      <div style={{paddingLeft:w?30:28,marginTop:8}}><textarea value={ex.notes||""} onChange={e=>uE(ei,{notes:e.target.value})} placeholder="Notes..." rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,padding:"6px 10px",resize:"none",overflow:"hidden",minHeight:36}}/></div>
     </div>)}
 
     {cardio.map((c,ci)=><div key={ci} style={{background:t.cBg,borderRadius:12,padding:w?12:10,marginBottom:10,border:"1px solid "+t.cB}}>
@@ -157,7 +160,7 @@ function WDay({plan,log,onLogChange,s,l,t}){
         </div>
         <button onClick={()=>dl("c",ci)} style={dBtn(cd==="c"+ci)}>{cd==="c"+ci?"Delete?":"X"}</button>
       </div>
-      <input value={c.notes||""} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,notes:e.target.value}:x)})} placeholder="Cardio notes..." style={{...s.i,padding:"6px 10px",marginTop:8}}/>
+      <textarea value={c.notes||""} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,notes:e.target.value}:x)})} placeholder="Cardio notes..." rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,padding:"6px 10px",marginTop:8,resize:"none",overflow:"hidden",minHeight:36}}/>
     </div>)}
 
     <div style={{display:"flex",gap:8,marginTop:14}}>
@@ -175,7 +178,7 @@ function WDay({plan,log,onLogChange,s,l,t}){
       <div style={{flex:"1 1 60px"}}><label style={s.lb}>Min</label><input value={fm.cd||""} onChange={e=>sFm({...fm,cd:e.target.value})} onKeyDown={e=>kd(e,aC)} style={s.i}/></div>
       <div style={{flex:"1 1 70px"}}><label style={s.lb}>Dist</label><input value={fm.ci||""} onChange={e=>sFm({...fm,ci:e.target.value})} onKeyDown={e=>kd(e,aC)} style={s.i}/></div>
       <button onClick={aC} style={{...s.b,background:t.green,color:"#000"}}>Add</button></div>}
-    <textarea placeholder="Day notes..." value={notes} onChange={e=>save({notes:e.target.value})} style={{...s.i,width:"100%",marginTop:12,minHeight:40,resize:"vertical",boxSizing:"border-box"}}/>
+    <textarea placeholder="Day notes..." value={notes} onChange={e=>save({notes:e.target.value})} rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,width:"100%",marginTop:12,minHeight:40,resize:"none",overflow:"hidden",boxSizing:"border-box"}}/>
   </div>);
 }
 
@@ -192,8 +195,8 @@ function MDay({planned:rawP,logged,onLogChange,s,l,t}){
         <button onClick={()=>up(i,"confirmed",!m.confirmed)} style={{...s.b,padding:"5px 14px",fontSize:12,background:m.confirmed?t.green:t.gl,color:m.confirmed?"#000":t.tm,border:m.confirmed?"none":"1px solid "+t.bm}}>{m.confirmed?"Ate":"Confirm"}</button>
       </div>
       {m.planned&&<div style={{color:t.tm,fontSize:w?14:13,marginBottom:8,padding:"8px 12px",background:t.mpBg,borderRadius:8}}><span style={{color:t.tf,fontSize:12}}>PLAN: </span>{m.planned}</div>}
-      <input value={m.actual||""} onChange={e=>up(i,"actual",e.target.value)} placeholder={m.planned?"What I actually ate (blank = followed plan)":"What I ate..."} style={s.i}/>
-      <input value={m.notes||""} onChange={e=>up(i,"notes",e.target.value)} placeholder="Meal notes..." style={{...s.i,marginTop:6}}/>
+      <textarea value={m.actual||""} onChange={e=>up(i,"actual",e.target.value)} placeholder={m.planned?"What I actually ate (blank = followed plan)":"What I ate..."} rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,resize:"none",overflow:"hidden",minHeight:36}}/>
+      <textarea value={m.notes||""} onChange={e=>up(i,"notes",e.target.value)} placeholder="Meal notes..." rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,marginTop:6,resize:"none",overflow:"hidden",minHeight:36}}/>
     </div>)}
   </div>);
 }
