@@ -9,6 +9,15 @@ const dayDate = (wk,i) => { const d = new Date(wk+"T12:00:00"); d.setDate(d.getD
 function useLayout(){ const[w,sW]=useState(window.innerWidth); useEffect(()=>{const h=()=>sW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w>=1024?"D":w>=600?"T":"P";}
 const isW=l=>l!=="P";
 
+function AutoTA({value,onChange,placeholder,style:extraStyle}) {
+  const ref = useCallback(node => {
+    if (node) { node.style.height = "auto"; node.style.height = node.scrollHeight + "px"; }
+  }, [value]);
+  return <textarea ref={ref} value={value} onChange={onChange} placeholder={placeholder} rows={1}
+    onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
+    style={{...extraStyle,resize:"none",overflow:"hidden",minHeight:36}}/>;
+}
+
 const Icon = ({size=28,accent="#c8ff00",bg="#000"}) => (
   <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect width="120" height="120" rx="28" fill={bg}/>
@@ -149,7 +158,7 @@ function WDay({plan,log,onLogChange,s,l,t}){
         </div>)}
       </div>}
       <div style={{paddingLeft:w?30:28,marginTop:8}}><button onClick={()=>uE(ei,{sets:[...(ex.sets||[]),{reps:"",weight:"",mode:"reps"}]})} style={{...s.bg,padding:"5px 14px"}}>+ set</button></div>
-      <div style={{paddingLeft:w?30:28,marginTop:8}}><textarea value={ex.notes||""} onChange={e=>uE(ei,{notes:e.target.value})} placeholder="Notes..." rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,padding:"6px 10px",resize:"none",overflow:"hidden",minHeight:36}}/></div>
+      <div style={{paddingLeft:w?30:28,marginTop:8}}><AutoTA value={ex.notes||""} onChange={e=>uE(ei,{notes:e.target.value})} placeholder="Notes..." style={{...s.i,padding:"6px 10px"}}/></div>
     </div>)}
 
     {cardio.map((c,ci)=><div key={ci} style={{background:t.cBg,borderRadius:12,padding:w?12:10,marginBottom:10,border:"1px solid "+t.cB}}>
@@ -160,7 +169,7 @@ function WDay({plan,log,onLogChange,s,l,t}){
         </div>
         <button onClick={()=>dl("c",ci)} style={dBtn(cd==="c"+ci)}>{cd==="c"+ci?"Delete?":"X"}</button>
       </div>
-      <textarea value={c.notes||""} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,notes:e.target.value}:x)})} placeholder="Cardio notes..." rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,padding:"6px 10px",marginTop:8,resize:"none",overflow:"hidden",minHeight:36}}/>
+      <AutoTA value={c.notes||""} onChange={e=>save({cardio:cardio.map((x,j)=>j===ci?{...x,notes:e.target.value}:x)})} placeholder="Cardio notes..." style={{...s.i,padding:"6px 10px",marginTop:8}}/>
     </div>)}
 
     <div style={{display:"flex",gap:8,marginTop:14}}>
@@ -178,7 +187,7 @@ function WDay({plan,log,onLogChange,s,l,t}){
       <div style={{flex:"1 1 60px"}}><label style={s.lb}>Min</label><input value={fm.cd||""} onChange={e=>sFm({...fm,cd:e.target.value})} onKeyDown={e=>kd(e,aC)} style={s.i}/></div>
       <div style={{flex:"1 1 70px"}}><label style={s.lb}>Dist</label><input value={fm.ci||""} onChange={e=>sFm({...fm,ci:e.target.value})} onKeyDown={e=>kd(e,aC)} style={s.i}/></div>
       <button onClick={aC} style={{...s.b,background:t.green,color:"#000"}}>Add</button></div>}
-    <textarea placeholder="Day notes..." value={notes} onChange={e=>save({notes:e.target.value})} rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,width:"100%",marginTop:12,minHeight:40,resize:"none",overflow:"hidden",boxSizing:"border-box"}}/>
+    <AutoTA placeholder="Day notes..." value={notes} onChange={e=>save({notes:e.target.value})} style={{...s.i,width:"100%",marginTop:12,boxSizing:"border-box"}}/>
   </div>);
 }
 
@@ -195,8 +204,8 @@ function MDay({planned:rawP,logged,onLogChange,s,l,t}){
         <button onClick={()=>up(i,"confirmed",!m.confirmed)} style={{...s.b,padding:"5px 14px",fontSize:12,background:m.confirmed?t.green:t.gl,color:m.confirmed?"#000":t.tm,border:m.confirmed?"none":"1px solid "+t.bm}}>{m.confirmed?"Ate":"Confirm"}</button>
       </div>
       {m.planned&&<div style={{color:t.tm,fontSize:w?14:13,marginBottom:8,padding:"8px 12px",background:t.mpBg,borderRadius:8}}><span style={{color:t.tf,fontSize:12}}>PLAN: </span>{m.planned}</div>}
-      <textarea value={m.actual||""} onChange={e=>up(i,"actual",e.target.value)} placeholder={m.planned?"What I actually ate (blank = followed plan)":"What I ate..."} rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,resize:"none",overflow:"hidden",minHeight:36}}/>
-      <textarea value={m.notes||""} onChange={e=>up(i,"notes",e.target.value)} placeholder="Meal notes..." rows={1} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}} style={{...s.i,marginTop:6,resize:"none",overflow:"hidden",minHeight:36}}/>
+      <AutoTA value={m.actual||""} onChange={e=>up(i,"actual",e.target.value)} placeholder={m.planned?"What I actually ate (blank = followed plan)":"What I ate..."} style={s.i}/>
+      <AutoTA value={m.notes||""} onChange={e=>up(i,"notes",e.target.value)} placeholder="Meal notes..." style={{...s.i,marginTop:6}}/>
     </div>)}
   </div>);
 }
