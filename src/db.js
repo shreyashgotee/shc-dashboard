@@ -1,115 +1,195 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const headers = {
-  'apikey': SUPABASE_KEY,
-  'Authorization': `Bearer ${SUPABASE_KEY}`,
-  'Content-Type': 'application/json',
-  'Prefer': 'return=representation',
+const api = (path) => `${SUPABASE_URL}/rest/v1/${path}`;
+const authApi = (path) => `${SUPABASE_URL}/auth/v1/${path}`;
+
+let session = null;
+
+function getHeaders(prefer) {
+  const token = session?.access_token || SUPABASE_KEY;
+  const h = {
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+  if (prefer) h['Prefer'] = prefer;
+  return h;
+}
+
+function uid() { return session?.user?.id || null; }
+
+// ─── SHA-256 hash for PIN ───
+async function hashPin(pin) {
+  const enc = new TextEncoder().encode(pin);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── AUTH ───
+export const auth = {
+  getSession() { return session; },
+  getUserId: uid,
+
+  async init() {
+    const stored = localStorage.getItem('shc-rt');
+    if (!stored) return null;
+    try {
+      const res = await fetch(authApi('token?grant_type=refresh_token'), {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: stored }),
+      });
+      if (!res.ok) { localStorage.removeItem('shc-rt'); return null; }
+      const data = await res.json();
+      session = data;
+      localStorage.setItem('shc-rt', data.refresh_token);
+      return data;
+    } catch { return null; }
+  },
+
+  async login(email, password) {
+    const res = await fetch(authApi('token?grant_type=password'), {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error_description || e.msg || 'Login failed'); }
+    const data = await res.json();
+    session = data;
+    localStorage.setItem('shc-rt', data.refresh_token);
+    return data;
+  },
+
+  async signup(email, password) {
+    const res = await fetch(authApi('signup'), {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error_description || e.msg || 'Signup failed'); }
+    return await res.json();
+  },
+
+  logout() { session = null; localStorage.removeItem('shc-rt'); },
 };
 
-const api = (path) => `${SUPABASE_URL}/rest/v1/${path}`;
-
-export const db = {
-  // ─── WEEKLY PLAN ───
-  async getPlan(weekId) {
-    const res = await fetch(api(`weekly_plans?week_id=eq.${weekId}&select=*`), { headers });
+// ─── PIN ───
+export const pin = {
+  async getProfile() {
+    const id = uid();
+    if (!id) return null;
+    const res = await fetch(api(`user_profiles?id=eq.${id}&select=*`), { headers: getHeaders() });
     const data = await res.json();
-    return data?.[0] || null;
+    return Array.isArray(data) && data.length > 0 ? data[0] : null;
   },
 
-  async upsertPlan(weekId, workoutPlan, mealPlan, weekNotes = '') {
-    const res = await fetch(api('weekly_plans'), {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation,resolution=merge-duplicates' },
-      body: JSON.stringify({ week_id: weekId, workout_plan: workoutPlan, meal_plan: mealPlan, week_notes: weekNotes }),
+  async setPin(newPin) {
+    const id = uid();
+    if (!id) throw new Error('Not logged in');
+    const hash = await hashPin(newPin);
+    // Try update first
+    const pRes = await fetch(api(`user_profiles?id=eq.${id}`), {
+      method: 'PATCH', headers: getHeaders('return=representation'),
+      body: JSON.stringify({ pin_hash: hash }),
     });
-    const data = await res.json();
-    return data?.[0] || null;
+    const pData = await pRes.json();
+    if (Array.isArray(pData) && pData.length > 0) return pData[0];
+    // Insert if no profile exists
+    const iRes = await fetch(api('user_profiles'), {
+      method: 'POST', headers: getHeaders('return=representation'),
+      body: JSON.stringify({ id, pin_hash: hash }),
+    });
+    const iData = await iRes.json();
+    return iData?.[0] || null;
   },
 
-  // ─── WORKOUT LOGS ───
+  async verify(enteredPin) {
+    const profile = await this.getProfile();
+    if (!profile?.pin_hash) return true; // No PIN set = allow
+    const hash = await hashPin(enteredPin);
+    return hash === profile.pin_hash;
+  },
+
+  async hasPin() {
+    const profile = await this.getProfile();
+    return !!profile?.pin_hash;
+  },
+};
+
+// ─── DATABASE ───
+export const db = {
+  async getPlan(weekId) {
+    const res = await fetch(api(`weekly_plans?week_id=eq.${weekId}&select=*`), { headers: getHeaders() });
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] || null : null;
+  },
+
   async getWorkoutLogs(weekId) {
-    const res = await fetch(api(`workout_logs?week_id=eq.${weekId}&select=*&order=day_index`), { headers });
+    const res = await fetch(api(`workout_logs?week_id=eq.${weekId}&select=*&order=day_index`), { headers: getHeaders() });
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   },
 
   async upsertWorkoutLog(weekId, dayIndex, log) {
+    const id = uid();
     const body = {
-      week_id: weekId,
-      day_index: dayIndex,
-      exercises: log.exercises || [],
-      cardio: log.cardio || [],
-      used_micro: log.usedMicro || false,
-      completed: log.completed || false,
+      week_id: weekId, day_index: dayIndex,
+      exercises: log.exercises || [], cardio: log.cardio || [],
+      used_micro: log.usedMicro || false, completed: log.completed || false,
       notes: log.notes || '',
     };
-    // Try PATCH first (update existing)
-    const patchRes = await fetch(api(`workout_logs?week_id=eq.${weekId}&day_index=eq.${dayIndex}`), {
-      method: 'PATCH',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
+    if (id) body.user_id = id;
+    const pRes = await fetch(api(`workout_logs?week_id=eq.${weekId}&day_index=eq.${dayIndex}`), {
+      method: 'PATCH', headers: getHeaders('return=representation'), body: JSON.stringify(body),
     });
-    const patchData = await patchRes.json();
-    if (Array.isArray(patchData) && patchData.length > 0) return patchData[0];
-    // No existing row — POST new
-    const postRes = await fetch(api('workout_logs'), {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
+    const pData = await pRes.json();
+    if (Array.isArray(pData) && pData.length > 0) return pData[0];
+    const iRes = await fetch(api('workout_logs'), {
+      method: 'POST', headers: getHeaders('return=representation'), body: JSON.stringify(body),
     });
-    const postData = await postRes.json();
-    return postData?.[0] || null;
+    return (await iRes.json())?.[0] || null;
   },
 
-  // ─── MEAL LOGS ───
+  async upsertMealLog(weekId, dayIndex, meals) {
+    const id = uid();
+    const body = { week_id: weekId, day_index: dayIndex, meals };
+    if (id) body.user_id = id;
+    const pRes = await fetch(api(`meal_logs?week_id=eq.${weekId}&day_index=eq.${dayIndex}`), {
+      method: 'PATCH', headers: getHeaders('return=representation'), body: JSON.stringify(body),
+    });
+    const pData = await pRes.json();
+    if (Array.isArray(pData) && pData.length > 0) return pData[0];
+    const iRes = await fetch(api('meal_logs'), {
+      method: 'POST', headers: getHeaders('return=representation'), body: JSON.stringify(body),
+    });
+    return (await iRes.json())?.[0] || null;
+  },
+
   async getMealLogs(weekId) {
-    const res = await fetch(api(`meal_logs?week_id=eq.${weekId}&select=*&order=day_index`), { headers });
+    const res = await fetch(api(`meal_logs?week_id=eq.${weekId}&select=*&order=day_index`), { headers: getHeaders() });
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   },
 
-  async upsertMealLog(weekId, dayIndex, meals) {
-    const body = { week_id: weekId, day_index: dayIndex, meals };
-    const patchRes = await fetch(api(`meal_logs?week_id=eq.${weekId}&day_index=eq.${dayIndex}`), {
-      method: 'PATCH',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
-    });
-    const patchData = await patchRes.json();
-    if (Array.isArray(patchData) && patchData.length > 0) return patchData[0];
-    const postRes = await fetch(api('meal_logs'), {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
-    });
-    const postData = await postRes.json();
-    return postData?.[0] || null;
-  },
-
-  // ─── MEASUREMENTS ───
   async getMeasurements(weekId) {
-    const res = await fetch(api(`measurements?week_id=eq.${weekId}&select=*`), { headers });
+    const res = await fetch(api(`measurements?week_id=eq.${weekId}&select=*`), { headers: getHeaders() });
     const data = await res.json();
-    return data?.[0] || null;
+    return Array.isArray(data) ? data[0] || null : null;
   },
 
   async upsertMeasurements(weekId, m) {
+    const id = uid();
     const body = { week_id: weekId, weight: m.weight, body_fat: m.bodyFat, waist: m.waist, chest: m.chest, arms: m.arms, measured_at: m.date || null };
-    const patchRes = await fetch(api(`measurements?week_id=eq.${weekId}`), {
-      method: 'PATCH',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
+    if (id) body.user_id = id;
+    const pRes = await fetch(api(`measurements?week_id=eq.${weekId}`), {
+      method: 'PATCH', headers: getHeaders('return=representation'), body: JSON.stringify(body),
     });
-    const patchData = await patchRes.json();
-    if (Array.isArray(patchData) && patchData.length > 0) return patchData[0];
-    const postRes = await fetch(api('measurements'), {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
+    const pData = await pRes.json();
+    if (Array.isArray(pData) && pData.length > 0) return pData[0];
+    const iRes = await fetch(api('measurements'), {
+      method: 'POST', headers: getHeaders('return=representation'), body: JSON.stringify(body),
     });
-    const postData = await postRes.json();
-    return postData?.[0] || null;
+    return (await iRes.json())?.[0] || null;
   },
 };
