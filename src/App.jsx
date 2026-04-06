@@ -247,6 +247,12 @@ function ExProgress({s,l,t}) {
   },[]);
 
   // Extract unique exercise names with log counts and build history
+  // Normalize: strip superset prefixes (A1:, B2:, etc.), trim, case-insensitive grouping
+  const normalizeName=(raw)=>{
+    let n=raw.trim();
+    n=n.replace(/^[A-Za-z]\d+[\s]*[:.\-]\s*/,""); // strip "A1: ", "B2. ", "A1- " etc
+    return n;
+  };
   const exerciseMap={};
   allLogs.forEach(log=>{
     const wk=log.week_id;const di=log.day_index;
@@ -254,22 +260,23 @@ function ExProgress({s,l,t}) {
     const dateStr=d.toISOString().slice(0,10);
     (Array.isArray(log.exercises)?log.exercises:[]).forEach(ex=>{
       if(!ex.name)return;
-      const name=ex.name.trim();
-      if(!exerciseMap[name])exerciseMap[name]={count:0,history:[]};
-      exerciseMap[name].count++;
+      const display=normalizeName(ex.name);
+      const key=display.toLowerCase();
+      if(!exerciseMap[key])exerciseMap[key]={display,count:0,history:[]};
+      exerciseMap[key].count++;
       // Get max weight from sets
       const sets=Array.isArray(ex.sets)?ex.sets:[];
       const maxWeight=sets.reduce((mx,s)=>{const w=parseFloat(s.weight);return isNaN(w)?mx:Math.max(mx,w);},0);
       const maxReps=sets.reduce((mx,s)=>{const r=parseFloat(s.reps);return isNaN(r)?mx:Math.max(mx,r);},0);
       const maxTime=sets.reduce((mx,s)=>{const t=parseFloat(s.time);return isNaN(t)?mx:Math.max(mx,t);},0);
       if(maxWeight>0||maxReps>0||maxTime>0){
-        exerciseMap[name].history.push({date:dateStr,weight:maxWeight,reps:maxReps,time:maxTime,setCount:sets.length});
+        exerciseMap[key].history.push({date:dateStr,weight:maxWeight,reps:maxReps,time:maxTime,setCount:sets.length});
       }
     });
   });
 
   const exercises=Object.entries(exerciseMap)
-    .map(([name,data])=>({name,...data,history:data.history.sort((a,b)=>a.date.localeCompare(b.date))}))
+    .map(([key,data])=>({key,name:data.display,...data,history:data.history.sort((a,b)=>a.date.localeCompare(b.date))}))
     .sort((a,b)=>b.count-a.count);
 
   const filtered=search?exercises.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())):exercises;
@@ -284,7 +291,7 @@ function ExProgress({s,l,t}) {
     return history.filter(h=>h.date>=cutStr);
   };
 
-  const sel=selected?exercises.find(e=>e.name===selected):null;
+  const sel=selected?exercises.find(e=>e.key===selected):null;
   const chartData=sel?filterByPeriod(sel.history).map(h=>({...h,label:(parseInt(h.date.slice(5,7))+"/"+parseInt(h.date.slice(8,10)))})):[];
   const pr=sel?sel.history.reduce((best,h)=>h.weight>best.weight?h:best,{weight:0,date:""}):null;
   const last=sel&&sel.history.length>0?sel.history[sel.history.length-1]:null;
@@ -299,7 +306,7 @@ function ExProgress({s,l,t}) {
     {!selected&&<div>
       {filtered.length===0&&<div style={{color:t.tf,padding:20,textAlign:"center"}}>No exercises logged yet</div>}
       {filtered.map(ex=>(
-        <button key={ex.name} onClick={()=>setSelected(ex.name)} style={{
+        <button key={ex.key} onClick={()=>setSelected(ex.key)} style={{
           display:"block",width:"100%",textAlign:"left",
           background:t.card,border:"1px solid "+t.cb,borderRadius:10,
           padding:"14px 16px",marginBottom:8,cursor:"pointer",
@@ -316,7 +323,7 @@ function ExProgress({s,l,t}) {
 
       <div style={{...s.c}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
-          <div style={{color:t.text,fontSize:w?18:16,fontWeight:700}}>{selected}</div>
+          <div style={{color:t.text,fontSize:w?18:16,fontWeight:700}}>{sel?.name||selected}</div>
           <div style={{display:"flex",gap:6}}>
             {["1M","3M","6M","All"].map(p=>(
               <button key={p} onClick={()=>setPeriod(p)} style={{
