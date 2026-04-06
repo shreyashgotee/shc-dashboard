@@ -1,17 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db, auth, pin } from './db.js';
 
-const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-// Display order: Mon-Sun (but DB still uses 0=Sun,1=Mon,...6=Sat)
-const DISPLAY_ORDER = [1,2,3,4,5,6,0]; // DB indices in Mon-Sun order
-const DISPLAY_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-const DISPLAY_SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const getWeekId = (date = new Date()) => { const d = new Date(date); d.setDate(d.getDate()-d.getDay()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-const todayDisplayIdx = () => { const jsDay = new Date().getDay(); return jsDay === 0 ? 6 : jsDay - 1; }; // Mon=0,...Sun=6
-const todayDbIdx = () => new Date().getDay(); // Sun=0,...Sat=6
-const localDate = () => new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD"
-const dayDate = (wk,dbIdx) => { const d = new Date(wk+"T12:00:00"); d.setDate(d.getDate()+dbIdx); return `${d.getMonth()+1}/${d.getDate()}`; };
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+// week_id = Monday date. day_index: 0=Mon,1=Tue,...6=Sun
+const getWeekId = (date = new Date()) => { const d = new Date(date); const jsDay = d.getDay(); const diff = jsDay === 0 ? 6 : jsDay - 1; d.setDate(d.getDate() - diff); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+const todayIdx = () => { const jsDay = new Date().getDay(); return jsDay === 0 ? 6 : jsDay - 1; }; // Mon=0,...Sun=6
+const localDate = () => new Date().toLocaleDateString('en-CA');
+const dayDate = (wk,dayIdx) => { const d = new Date(wk+"T12:00:00"); d.setDate(d.getDate()+dayIdx); return `${d.getMonth()+1}/${d.getDate()}`; };
 function useLayout(){ const[w,sW]=useState(window.innerWidth); useEffect(()=>{const h=()=>sW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w>=1024?"D":w>=600?"T":"P";}
 const isW=l=>l!=="P";
 
@@ -264,7 +260,7 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
   const [mlLogs,setMlLogs]=useState({});
   const [meas,setMeas]=useState({weight:"",bodyFat:"",waist:"",chest:"",arms:"",date:""});
   const [tab,setTab]=useState("w");
-  const [day,setDay]=useState(todayDisplayIdx());
+  const [day,setDay]=useState(todayIdx());
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [refreshing,setRefreshing]=useState(false);
@@ -311,7 +307,7 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
       await Promise.all(pr);
       setDirty(false);setSaveMsg("Saved");setTimeout(()=>setSaveMsg(""),3000);
       // Update streak if any activity was completed today
-      const todayLog=woLogs[todayDbIdx()];
+      const todayLog=woLogs[todayIdx()];
       if(todayLog){
         const ex=Array.isArray(todayLog.exercises)?todayLog.exercises:[];
         const cd=Array.isArray(todayLog.cardio)?todayLog.cardio:[];
@@ -389,26 +385,26 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
         </div>
 
         {tab!=="b"&&<div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
-          {DISPLAY_SHORT.map((d,di)=>{const dbIdx=DISPLAY_ORDER[di];const isT=dbIdx===todayDbIdx()&&wk===getWeekId();return<button key={d} onClick={()=>setDay(di)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:isT?"1.5px solid "+t.accent:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===di?t.ds:"transparent",color:day===di?t.accent:t.di,fontWeight:day===di?700:400,boxShadow:isT?"0 0 12px "+t.ag:"none",transition:"all .2s"}}>
-            {d+" "}<span style={{fontSize:10,opacity:.5}}>{dayDate(wk,dbIdx)}</span>
+          {SHORT.map((d,i)=>{const isT=i===todayIdx()&&wk===getWeekId();return<button key={d} onClick={()=>setDay(i)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:isT?"1.5px solid "+t.accent:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===i?t.ds:"transparent",color:day===i?t.accent:t.di,fontWeight:day===i?700:400,boxShadow:isT?"0 0 12px "+t.ag:"none",transition:"all .2s"}}>
+            {d+" "}<span style={{fontSize:10,opacity:.5}}>{dayDate(wk,i)}</span>
           </button>;})}
           <button onClick={()=>setDay(-1)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===-1?t.ds:"transparent",color:day===-1?t.accent:t.di,fontWeight:day===-1?700:400}}>ALL</button>
         </div>}
 
         {tab==="w"&&(day===-1
-          ?DISPLAY_ORDER.map((dbIdx,di)=>wp[dbIdx]?<WDay key={di} plan={{...wp[dbIdx],day:DAYS[dbIdx]}} log={woLogs[dbIdx]||{}} onLogChange={d=>updateWoLog(dbIdx,d)} s={s} l={l} t={t}/>:null)
-          :wp[DISPLAY_ORDER[day]]?<WDay plan={{...wp[DISPLAY_ORDER[day]],day:DAYS[DISPLAY_ORDER[day]]}} log={woLogs[DISPLAY_ORDER[day]]||{}} onLogChange={d=>updateWoLog(DISPLAY_ORDER[day],d)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No plan for this day</div>
+          ?wp.map((p,i)=><WDay key={i} plan={{...p,day:DAYS[i]}} log={woLogs[i]||{}} onLogChange={d=>updateWoLog(i,d)} s={s} l={l} t={t}/>)
+          :wp[day]?<WDay plan={{...wp[day],day:DAYS[day]}} log={woLogs[day]||{}} onLogChange={d=>updateWoLog(day,d)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No plan for this day</div>
         )}
         {tab==="m"&&(day===-1
-          ?DISPLAY_ORDER.map((dbIdx,di)=>mp[dbIdx]?<MDay key={di} planned={mp[dbIdx].meals||[]} logged={mlLogs[dbIdx]?.meals} onLogChange={m=>updateMlLog(dbIdx,m)} s={s} l={l} t={t}/>:null)
-          :mp[DISPLAY_ORDER[day]]?<MDay planned={mp[DISPLAY_ORDER[day]].meals||[]} logged={mlLogs[DISPLAY_ORDER[day]]?.meals} onLogChange={m=>updateMlLog(DISPLAY_ORDER[day],m)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No meal plan for this day</div>
+          ?mp.map((p,i)=><MDay key={i} planned={p.meals||[]} logged={mlLogs[i]?.meals} onLogChange={m=>updateMlLog(i,m)} s={s} l={l} t={t}/>)
+          :mp[day]?<MDay planned={mp[day].meals||[]} logged={mlLogs[day]?.meals} onLogChange={m=>updateMlLog(day,m)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No meal plan for this day</div>
         )}
         {tab==="b"&&<Body data={meas} onChange={updateMeas} s={s} l={l} t={t}/>}
       </>}
 
       <div style={{display:"flex",justifyContent:"center",gap:w?16:10,marginTop:w?28:20,paddingTop:14,borderTop:"1px solid "+t.bf}}>
         <button onClick={()=>{const d=new Date(wk+"T12:00:00");d.setDate(d.getDate()-7);setWk(getWeekId(d));}} style={s.bg}>Prev</button>
-        <button onClick={()=>{setWk(getWeekId());setDay(todayDisplayIdx());}} style={{...s.bg,color:t.accent,borderColor:t.accent,boxShadow:"0 0 12px "+t.ag}}>This Week</button>
+        <button onClick={()=>{setWk(getWeekId());setDay(todayIdx());}} style={{...s.bg,color:t.accent,borderColor:t.accent,boxShadow:"0 0 12px "+t.ag}}>This Week</button>
         <button onClick={()=>{const d=new Date(wk+"T12:00:00");d.setDate(d.getDate()+7);setWk(getWeekId(d));}} style={s.bg}>Next</button>
       </div>
     </div>
