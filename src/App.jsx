@@ -470,7 +470,7 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
       {/* Sidebar */}
       {sideOpen&&<div style={{position:"fixed",inset:0,zIndex:998}} onClick={()=>setSideOpen(false)}><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(4px)"}}/></div>}
       {sideOpen&&<div style={{position:"fixed",top:0,left:0,bottom:0,width:260,background:t.bg,borderRight:"1px solid "+t.cb,padding:"80px 16px 20px",zIndex:999,display:"flex",flexDirection:"column",gap:4}}>
-        {[["dashboard","Dashboard"],["progression","Exercise Progression"]].map(([id,lb])=>(
+        {[["dashboard","Dashboard"],["progression","Exercise Progression"],["body","Body Measurements"]].map(([id,lb])=>(
           <button key={id} onClick={()=>{setPage(id);setSideOpen(false);}} style={{
             background:page===id?t.ag:"transparent",border:page===id?"1px solid "+t.accent+"33":"1px solid transparent",
             borderRadius:10,padding:"14px 16px",textAlign:"left",cursor:"pointer",
@@ -503,14 +503,19 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
 
       {page==="progression"&&<ExProgress s={s} l={l} t={t}/>}
 
+      {page==="body"&&<Body data={meas} onChange={updateMeas} s={s} l={l} t={t}/>}
+
       {page==="dashboard"&&<>
+      {/* KPIs — tappable to switch between workouts and meals */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:w?12:6,marginBottom:w?20:12}}>
-        {[{v:weekDone,m:"/7",la:"WORKOUTS",c:t.accent,g:t.ag},{v:mealsDone,m:"/21",la:"MEALS",c:t.green,g:t.gg}].map((k,i)=>(
-          <div key={i} style={{...s.c,textAlign:"center",marginBottom:0,background:"linear-gradient(135deg,"+k.g+","+t.card+")"}}>
-            <div style={{color:k.c,fontSize:l==="D"?32:w?28:22,fontWeight:900}}>{k.v}<span style={{fontSize:w?14:11,color:t.ks}}>{k.m}</span></div>
-            <div style={{color:t.kl,fontSize:12,fontWeight:700,letterSpacing:2,marginTop:2}}>{k.la}</div>
-          </div>
-        ))}
+        <button onClick={()=>setTab("w")} style={{...s.c,textAlign:"center",marginBottom:0,background:"linear-gradient(135deg,"+t.ag+","+t.card+")",border:tab==="w"?"1.5px solid "+t.accent:"1px solid "+t.cb,cursor:"pointer",transition:"all .2s",boxShadow:tab==="w"?"0 0 15px "+t.ag:"none"}}>
+          <div style={{color:t.accent,fontSize:l==="D"?32:w?28:22,fontWeight:900}}>{weekDone}<span style={{fontSize:w?14:11,color:t.ks}}>/7</span></div>
+          <div style={{color:t.kl,fontSize:12,fontWeight:700,letterSpacing:2,marginTop:2}}>WORKOUTS</div>
+        </button>
+        <button onClick={()=>setTab("m")} style={{...s.c,textAlign:"center",marginBottom:0,background:"linear-gradient(135deg,"+t.gg+","+t.card+")",border:tab==="m"?"1.5px solid "+t.green:"1px solid "+t.cb,cursor:"pointer",transition:"all .2s",boxShadow:tab==="m"?"0 0 15px "+t.gg:"none"}}>
+          <div style={{color:t.green,fontSize:l==="D"?32:w?28:22,fontWeight:900}}>{mealsDone}<span style={{fontSize:w?14:11,color:t.ks}}>/21</span></div>
+          <div style={{color:t.kl,fontSize:12,fontWeight:700,letterSpacing:2,marginTop:2}}>MEALS</div>
+        </button>
         <div style={{...s.c,textAlign:"center",marginBottom:0,position:"relative"}}>
           <div style={{color:streakData.current_streak>=14?t.accent:streakData.current_streak>=7?t.yellow:t.red,fontSize:l==="D"?32:w?28:22,fontWeight:900}}>{"\uD83D\uDD25"}{streakData.current_streak}</div>
           <div style={{color:t.kl,fontSize:12,fontWeight:700,letterSpacing:2,marginTop:2}}>STREAK</div>
@@ -526,18 +531,15 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
       </div>}
 
       {!noPlan&&<>
-        <div style={{display:"flex",gap:6,borderBottom:"1px solid "+t.bf,paddingBottom:10,marginBottom:16}}>
-          {[["w","Workouts"],["m","Meals"],["b","Body"]].map(([id,lb])=>
-            <button key={id} onClick={()=>setTab(id)} style={{padding:l==="D"?"10px 24px":w?"10px 18px":"8px 14px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:w?14:13,fontFamily:"'Overpass Mono',monospace",background:tab===id?t.accent:"transparent",color:tab===id?t.at:t.ti,boxShadow:tab===id?"0 0 20px "+t.ag:"none",transition:"all .2s"}}>{lb}</button>)}
-        </div>
-
-        {tab!=="b"&&<div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
+        {/* Day selector */}
+        <div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
           {SHORT.map((d,i)=>{const isT=i===todayIdx()&&wk===getWeekId();return<button key={d} onClick={()=>setDay(i)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:isT?"1.5px solid "+t.accent:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===i?t.ds:"transparent",color:day===i?t.accent:t.di,fontWeight:day===i?700:400,boxShadow:isT?"0 0 12px "+t.ag:"none",transition:"all .2s"}}>
             {d+" "}<span style={{fontSize:10,opacity:.5}}>{dayDate(wk,i)}</span>
           </button>;})}
           <button onClick={()=>setDay(-1)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===-1?t.ds:"transparent",color:day===-1?t.accent:t.di,fontWeight:day===-1?700:400}}>ALL</button>
-        </div>}
+        </div>
 
+        {/* Content */}
         {tab==="w"&&(day===-1
           ?wp.map((p,i)=><WDay key={i} plan={{...p,day:DAYS[i]}} log={woLogs[i]||{}} onLogChange={d=>updateWoLog(i,d)} s={s} l={l} t={t}/>)
           :wp[day]?<WDay plan={{...wp[day],day:DAYS[day]}} log={woLogs[day]||{}} onLogChange={d=>updateWoLog(day,d)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No plan for this day</div>
@@ -546,7 +548,6 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
           ?mp.map((p,i)=><MDay key={i} planned={p.meals||[]} logged={mlLogs[i]?.meals} onLogChange={m=>updateMlLog(i,m)} s={s} l={l} t={t}/>)
           :mp[day]?<MDay planned={mp[day].meals||[]} logged={mlLogs[day]?.meals} onLogChange={m=>updateMlLog(day,m)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No meal plan for this day</div>
         )}
-        {tab==="b"&&<Body data={meas} onChange={updateMeas} s={s} l={l} t={t}/>}
       </>}
 
       <div style={{display:"flex",justifyContent:"center",gap:w?16:10,marginTop:w?28:20,paddingTop:14,borderTop:"1px solid "+t.bf}}>
