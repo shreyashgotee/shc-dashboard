@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db, auth, pin } from './db.js';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -232,7 +233,125 @@ function Body({data,onChange,s,l,t}){
   </div>);
 }
 
-// ════════════════ MAIN APP ════════════════
+// ─── EXERCISE PROGRESSION ───
+function ExProgress({s,l,t}) {
+  const w=isW(l);
+  const [allLogs,setAllLogs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [selected,setSelected]=useState(null);
+  const [search,setSearch]=useState("");
+  const [period,setPeriod]=useState("6M");
+
+  useEffect(()=>{
+    db.getAllWorkoutLogs().then(logs=>{setAllLogs(logs);setLoading(false);});
+  },[]);
+
+  // Extract unique exercise names with log counts and build history
+  const exerciseMap={};
+  allLogs.forEach(log=>{
+    const wk=log.week_id;const di=log.day_index;
+    const d=new Date(wk+"T12:00:00");d.setDate(d.getDate()+di);
+    const dateStr=d.toISOString().slice(0,10);
+    (Array.isArray(log.exercises)?log.exercises:[]).forEach(ex=>{
+      if(!ex.name)return;
+      const name=ex.name.trim();
+      if(!exerciseMap[name])exerciseMap[name]={count:0,history:[]};
+      exerciseMap[name].count++;
+      // Get max weight from sets
+      const sets=Array.isArray(ex.sets)?ex.sets:[];
+      const maxWeight=sets.reduce((mx,s)=>{const w=parseFloat(s.weight);return isNaN(w)?mx:Math.max(mx,w);},0);
+      const maxReps=sets.reduce((mx,s)=>{const r=parseFloat(s.reps);return isNaN(r)?mx:Math.max(mx,r);},0);
+      const maxTime=sets.reduce((mx,s)=>{const t=parseFloat(s.time);return isNaN(t)?mx:Math.max(mx,t);},0);
+      if(maxWeight>0||maxReps>0||maxTime>0){
+        exerciseMap[name].history.push({date:dateStr,weight:maxWeight,reps:maxReps,time:maxTime,setCount:sets.length});
+      }
+    });
+  });
+
+  const exercises=Object.entries(exerciseMap)
+    .map(([name,data])=>({name,...data,history:data.history.sort((a,b)=>a.date.localeCompare(b.date))}))
+    .sort((a,b)=>b.count-a.count);
+
+  const filtered=search?exercises.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())):exercises;
+
+  // Period filter
+  const filterByPeriod=(history)=>{
+    if(period==="All")return history;
+    const now=new Date();
+    const months={["1M"]:1,["3M"]:3,["6M"]:6}[period]||6;
+    const cutoff=new Date(now);cutoff.setMonth(cutoff.getMonth()-months);
+    const cutStr=cutoff.toISOString().slice(0,10);
+    return history.filter(h=>h.date>=cutStr);
+  };
+
+  const sel=selected?exercises.find(e=>e.name===selected):null;
+  const chartData=sel?filterByPeriod(sel.history).map(h=>({...h,label:(parseInt(h.date.slice(5,7))+"/"+parseInt(h.date.slice(8,10)))})):[];
+  const pr=sel?sel.history.reduce((best,h)=>h.weight>best.weight?h:best,{weight:0,date:""}):null;
+  const last=sel&&sel.history.length>0?sel.history[sel.history.length-1]:null;
+
+  if(loading)return <div style={{color:t.tm,padding:40,textAlign:"center"}}>Loading exercise data...</div>;
+
+  return(<div>
+    <div style={{color:t.accent,fontSize:w?20:18,fontWeight:800,marginBottom:16}}>Exercise Progression</div>
+
+    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search exercises..." style={{...s.i,marginBottom:14}}/>
+
+    {!selected&&<div>
+      {filtered.length===0&&<div style={{color:t.tf,padding:20,textAlign:"center"}}>No exercises logged yet</div>}
+      {filtered.map(ex=>(
+        <button key={ex.name} onClick={()=>setSelected(ex.name)} style={{
+          display:"block",width:"100%",textAlign:"left",
+          background:t.card,border:"1px solid "+t.cb,borderRadius:10,
+          padding:"14px 16px",marginBottom:8,cursor:"pointer",
+          color:t.text,fontSize:14,fontFamily:"'Overpass Mono',monospace",
+        }}>
+          {ex.name}
+          <span style={{float:"right",color:t.tf,fontSize:12}}>{ex.count+"x"}</span>
+        </button>
+      ))}
+    </div>}
+
+    {selected&&<div>
+      <button onClick={()=>setSelected(null)} style={{...s.bg,marginBottom:14,fontSize:13}}>{"< Back to list"}</button>
+
+      <div style={{...s.c}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+          <div style={{color:t.text,fontSize:w?18:16,fontWeight:700}}>{selected}</div>
+          <div style={{display:"flex",gap:6}}>
+            {["1M","3M","6M","All"].map(p=>(
+              <button key={p} onClick={()=>setPeriod(p)} style={{
+                background:period===p?t.ag:"transparent",border:"1px solid "+t.bm,borderRadius:6,
+                padding:"4px 10px",fontSize:11,cursor:"pointer",
+                color:period===p?t.accent:t.tm,fontFamily:"'Overpass Mono',monospace",
+              }}>{p}</button>
+            ))}
+          </div>
+        </div>
+
+        {chartData.length>1?(
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={chartData} margin={{top:5,right:10,bottom:5,left:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke={t.bf} vertical={false}/>
+              <XAxis dataKey="label" tick={{fill:t.tf,fontSize:11}} tickLine={false} axisLine={{stroke:t.bf}}/>
+              <YAxis tick={{fill:t.tf,fontSize:11}} tickLine={false} axisLine={false} width={35}/>
+              <Tooltip contentStyle={{background:t.bg,border:"1px solid "+t.cb,borderRadius:8,color:t.text,fontFamily:"'Overpass Mono',monospace",fontSize:12}} labelStyle={{color:t.accent}}/>
+              <Line type="monotone" dataKey="weight" stroke={t.accent} strokeWidth={2.5} dot={{fill:t.accent,r:4}} activeDot={{r:6}}/>
+            </LineChart>
+          </ResponsiveContainer>
+        ):(
+          <div style={{color:t.tf,textAlign:"center",padding:30,fontSize:13}}>
+            {chartData.length===1?"Only 1 data point — chart needs at least 2":"No data for this period"}
+          </div>
+        )}
+
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:14,fontSize:13,flexWrap:"wrap",gap:8}}>
+          {pr&&pr.weight>0&&<div style={{color:t.green}}>{"PR: "+pr.weight+" lbs ("+pr.date.slice(5)+")"}</div>}
+          {last&&<div style={{color:t.tm}}>{"Last: "+(last.setCount||"?")+"x"+(last.reps||last.time||"?")+" @ "+(last.weight||"BW")+" lbs"}</div>}
+        </div>
+      </div>
+    </div>}
+  </div>);
+}
 export default function App() {
   const l=useLayout(),w=isW(l);
   const [mode,setMode]=useState(()=>{try{return localStorage.getItem("shc-theme")||"dark"}catch{return"dark"}});
@@ -254,6 +373,8 @@ export default function App() {
 }
 
 function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
+  const [page,setPage]=useState("dashboard"); // "dashboard" or "progression"
+  const [sideOpen,setSideOpen]=useState(false);
   const [wk,setWk]=useState(getWeekId());
   const [plan,setPlan]=useState(null);
   const [woLogs,setWoLogs]=useState({});
@@ -339,9 +460,25 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
 
       {showPin&&<PinModal onVerify={doSave} onCancel={()=>setShowPin(false)} t={t}/>}
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:w?24:16}}>
+      {/* Sidebar */}
+      {sideOpen&&<div style={{position:"fixed",inset:0,zIndex:998}} onClick={()=>setSideOpen(false)}><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(4px)"}}/></div>}
+      {sideOpen&&<div style={{position:"fixed",top:0,left:0,bottom:0,width:260,background:t.bg,borderRight:"1px solid "+t.cb,padding:"80px 16px 20px",zIndex:999,display:"flex",flexDirection:"column",gap:4}}>
+        {[["dashboard","Dashboard"],["progression","Exercise Progression"]].map(([id,lb])=>(
+          <button key={id} onClick={()=>{setPage(id);setSideOpen(false);}} style={{
+            background:page===id?t.ag:"transparent",border:page===id?"1px solid "+t.accent+"33":"1px solid transparent",
+            borderRadius:10,padding:"14px 16px",textAlign:"left",cursor:"pointer",
+            color:page===id?t.accent:t.tm,fontSize:14,fontWeight:page===id?700:400,
+            fontFamily:"'Overpass Mono',monospace",transition:"all .2s",
+          }}>{lb}</button>
+        ))}
+        <div style={{marginTop:"auto",color:t.bf,fontSize:10}}>Shreyash Health Console</div>
+      </div>}
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:w?24:16,position:"relative",zIndex:1000}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <Icon size={w?32:28} accent={t.accent} bg={t.bg}/>
+          <button onClick={()=>setSideOpen(!sideOpen)} style={{background:"none",border:"none",cursor:"pointer",padding:0,borderRadius:8}}>
+            <Icon size={w?32:28} accent={t.accent} bg={t.bg}/>
+          </button>
           <h1 style={{color:t.accent,fontSize:w?20:17,fontWeight:900,margin:0,letterSpacing:1}}>Shreyash Health Console</h1>
           <button onClick={toggleMode} style={{background:t.gl,border:"1px solid "+t.bm,borderRadius:10,padding:"4px 10px",cursor:"pointer",fontSize:16,lineHeight:1,backdropFilter:"blur(10px)"}}>{t.tog}</button>
         </div>
@@ -357,6 +494,9 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
 
       {error&&<div style={{color:t.red,fontSize:13,marginBottom:12,padding:10,background:t.red+"11",borderRadius:10,border:"1px solid "+t.red+"33"}}>{"Error: "+error}</div>}
 
+      {page==="progression"&&<ExProgress s={s} l={l} t={t}/>}
+
+      {page==="dashboard"&&<>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:w?12:6,marginBottom:w?20:12}}>
         {[{v:weekDone,m:"/7",la:"WORKOUTS",c:t.accent,g:t.ag},{v:mealsDone,m:"/21",la:"MEALS",c:t.green,g:t.gg}].map((k,i)=>(
           <div key={i} style={{...s.c,textAlign:"center",marginBottom:0,background:"linear-gradient(135deg,"+k.g+","+t.card+")"}}>
@@ -407,6 +547,7 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
         <button onClick={()=>{setWk(getWeekId());setDay(todayIdx());}} style={{...s.bg,color:t.accent,borderColor:t.accent,boxShadow:"0 0 12px "+t.ag}}>This Week</button>
         <button onClick={()=>{const d=new Date(wk+"T12:00:00");d.setDate(d.getDate()+7);setWk(getWeekId(d));}} style={s.bg}>Next</button>
       </div>
+      </>}
     </div>
   );
 }

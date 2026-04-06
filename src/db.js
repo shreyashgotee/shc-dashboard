@@ -280,4 +280,11 @@ export const db = {
     const data = await res.json();
     return Array.isArray(data) && data.length > 0 ? data[0] : { error: "Failed to freeze" };
   },
+
+  // ─── EXERCISE HISTORY ───
+  async getAllWorkoutLogs() {
+    const res = await fetch(api('workout_logs?select=week_id,day_index,exercises&order=week_id,day_index'), { headers: getHeaders() });
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
 };
