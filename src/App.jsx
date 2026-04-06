@@ -3,9 +3,15 @@ import { db, auth, pin } from './db.js';
 
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+// Display order: Mon-Sun (but DB still uses 0=Sun,1=Mon,...6=Sat)
+const DISPLAY_ORDER = [1,2,3,4,5,6,0]; // DB indices in Mon-Sun order
+const DISPLAY_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const DISPLAY_SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const getWeekId = (date = new Date()) => { const d = new Date(date); d.setDate(d.getDate()-d.getDay()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-const todayIdx = () => new Date().getDay();
-const dayDate = (wk,i) => { const d = new Date(wk+"T12:00:00"); d.setDate(d.getDate()+i); return `${d.getMonth()+1}/${d.getDate()}`; };
+const todayDisplayIdx = () => { const jsDay = new Date().getDay(); return jsDay === 0 ? 6 : jsDay - 1; }; // Mon=0,...Sun=6
+const todayDbIdx = () => new Date().getDay(); // Sun=0,...Sat=6
+const localDate = () => new Date().toLocaleDateString('en-CA'); // "YYYY-MM-DD"
+const dayDate = (wk,dbIdx) => { const d = new Date(wk+"T12:00:00"); d.setDate(d.getDate()+dbIdx); return `${d.getMonth()+1}/${d.getDate()}`; };
 function useLayout(){ const[w,sW]=useState(window.innerWidth); useEffect(()=>{const h=()=>sW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w>=1024?"D":w>=600?"T":"P";}
 const isW=l=>l!=="P";
 
@@ -115,10 +121,17 @@ function WDay({plan,log,onLogChange,s,l,t}){
   const w=isW(l);
   const exercises=(log.exercises!==undefined)?(Array.isArray(log.exercises)?log.exercises:[]):(Array.isArray(plan.exercises)?plan.exercises.map(e=>({...e,sets:[],completed:false})):[]);
   const cardio=(log.cardio!==undefined)?(Array.isArray(log.cardio)?log.cardio:[]):(Array.isArray(plan.cardio)?plan.cardio.map(c=>({...c,completed:false})):[]);
-  const usedMicro=log.usedMicro||false, completed=log.completed||false;
+  const usedMicro=log.usedMicro||false;
   const notes=log.notes??plan.notes??"";
-  const dayDone=usedMicro||completed||(exercises.length>0&&exercises.every(e=>e.completed));
-  const save=(u)=>onLogChange({exercises,cardio,usedMicro,completed,notes,...u});
+  const exAnyDone=exercises.length>0&&exercises.some(e=>e.completed);
+  const cardioAnyDone=cardio.length>0&&cardio.some(c=>c.completed);
+  const dayDone=usedMicro||exAnyDone||cardioAnyDone;
+  const save=(u)=>{
+    const next={exercises,cardio,usedMicro,notes,...u};
+    const nEx=next.exercises||[];const nCd=next.cardio||[];
+    next.completed=next.usedMicro||(nEx.length>0&&nEx.some(e=>e.completed))||(nCd.length>0&&nCd.some(c=>c.completed));
+    onLogChange(next);
+  };
   const uE=(i,u)=>{const ex=[...exercises];ex[i]={...ex[i],...u};save({exercises:ex});};
   const uS=(ei,si,f,v)=>{const ex=[...exercises];ex[ei]={...ex[ei],sets:ex[ei].sets.map((x,j)=>j===si?{...x,[f]:v}:x)};save({exercises:ex});};
   const aE=()=>{if(!fm.n)return;save({exercises:[...exercises,{name:fm.n,targetSets:fm.s||"",targetReps:fm.r||"",rpe:fm.p||"",sets:[],completed:false,notes:""}]});sFm({});sSa(null);};
@@ -251,7 +264,7 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
   const [mlLogs,setMlLogs]=useState({});
   const [meas,setMeas]=useState({weight:"",bodyFat:"",waist:"",chest:"",arms:"",date:""});
   const [tab,setTab]=useState("w");
-  const [day,setDay]=useState(todayIdx());
+  const [day,setDay]=useState(todayDisplayIdx());
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [refreshing,setRefreshing]=useState(false);
@@ -259,6 +272,12 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
   const [dirty,setDirty]=useState(false);
   const [saveMsg,setSaveMsg]=useState("");
   const [showPin,setShowPin]=useState(false);
+  const [streakData,setStreakData]=useState({current_streak:0,longest_streak:0,last_freeze_date:null});
+  const [freezeMsg,setFreezeMsg]=useState("");
+
+  const loadStreak=useCallback(async()=>{
+    try{const s=await db.getStreak();if(s)setStreakData(s);}catch{}
+  },[]);
 
   const load=useCallback(async(showL=true)=>{
     if(showL)setLoading(true);
@@ -275,7 +294,8 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
   },[wk]);
 
   useEffect(()=>{load();},[load]);
-  const refresh=async()=>{setRefreshing(true);await load(false);setRefreshing(false);};
+  useEffect(()=>{if(!loading)loadStreak();},[loading,loadStreak]);
+  const refresh=async()=>{setRefreshing(true);await load(false);await loadStreak();setRefreshing(false);};
 
   const updateWoLog=(di,d)=>{setWoLogs(p=>({...p,[di]:{...(p[di]||{}),...d}}));setDirty(true);};
   const updateMlLog=(di,meals)=>{setMlLogs(p=>({...p,[di]:{...(p[di]||{}),meals}}));setDirty(true);};
@@ -290,6 +310,15 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
       if(meas.weight||meas.bodyFat||meas.waist||meas.chest||meas.arms)pr.push(db.upsertMeasurements(wk,meas));
       await Promise.all(pr);
       setDirty(false);setSaveMsg("Saved");setTimeout(()=>setSaveMsg(""),3000);
+      // Update streak if any activity was completed today
+      const todayLog=woLogs[todayDbIdx()];
+      if(todayLog){
+        const ex=Array.isArray(todayLog.exercises)?todayLog.exercises:[];
+        const cd=Array.isArray(todayLog.cardio)?todayLog.cardio:[];
+        const anyDone=todayLog.usedMicro||todayLog.completed||(ex.length>0&&ex.some(e=>e.completed))||(cd.length>0&&cd.some(c=>c.completed));
+        if(anyDone) await db.updateStreak(localDate());
+      }
+      await loadStreak();
     }catch(e){setSaveMsg("Failed!");}
     setSaving(false);
   };
@@ -301,7 +330,7 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
 
   const wp=Array.isArray(plan?.workout_plan)?plan.workout_plan:[];
   const mp=Array.isArray(plan?.meal_plan)?plan.meal_plan:[];
-  const streak=DAYS.reduce((a,_,i)=>{const p=wp[i]||{exercises:[]};const lg=woLogs[i]||{};const ex=lg.exercises?.length?lg.exercises:p.exercises||[];return a+((lg.usedMicro||lg.completed||(ex.length>0&&ex.every(e=>e.completed)))?1:0);},0);
+  const weekDone=DAYS.reduce((a,_,i)=>{const lg=woLogs[i]||{};const ex=Array.isArray(lg.exercises)?lg.exercises:[];const cd=Array.isArray(lg.cardio)?lg.cardio:[];return a+((lg.usedMicro||lg.completed||(ex.length>0&&ex.some(e=>e.completed))||(cd.length>0&&cd.some(c=>c.completed)))?1:0);},0);
   const mealsDone=DAYS.reduce((a,_,i)=>{const lg=mlLogs[i];if(!lg?.meals)return a;return a+lg.meals.filter(m=>m.confirmed).length;},0);
 
   if(loading) return <div style={{background:t.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:t.accent,fontFamily:"monospace"}}>Loading...</div>;
@@ -333,12 +362,19 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
       {error&&<div style={{color:t.red,fontSize:13,marginBottom:12,padding:10,background:t.red+"11",borderRadius:10,border:"1px solid "+t.red+"33"}}>{"Error: "+error}</div>}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:w?12:6,marginBottom:w?20:12}}>
-        {[{v:streak,m:"/7",la:"WORKOUTS",c:t.accent,g:t.ag},{v:mealsDone,m:"/21",la:"MEALS",c:t.green,g:t.gg},{v:streak,m:"",la:"STREAK",c:streak>=5?t.accent:streak>=3?t.yellow:t.red,g:"transparent",fire:true}].map((k,i)=>(
+        {[{v:weekDone,m:"/7",la:"WORKOUTS",c:t.accent,g:t.ag},{v:mealsDone,m:"/21",la:"MEALS",c:t.green,g:t.gg}].map((k,i)=>(
           <div key={i} style={{...s.c,textAlign:"center",marginBottom:0,background:"linear-gradient(135deg,"+k.g+","+t.card+")"}}>
-            <div style={{color:k.c,fontSize:l==="D"?32:w?28:22,fontWeight:900}}>{k.fire?"\uD83D\uDD25":""}{k.v}<span style={{fontSize:w?14:11,color:t.ks}}>{k.m}</span></div>
+            <div style={{color:k.c,fontSize:l==="D"?32:w?28:22,fontWeight:900}}>{k.v}<span style={{fontSize:w?14:11,color:t.ks}}>{k.m}</span></div>
             <div style={{color:t.kl,fontSize:12,fontWeight:700,letterSpacing:2,marginTop:2}}>{k.la}</div>
           </div>
         ))}
+        <div style={{...s.c,textAlign:"center",marginBottom:0,position:"relative"}}>
+          <div style={{color:streakData.current_streak>=14?t.accent:streakData.current_streak>=7?t.yellow:t.red,fontSize:l==="D"?32:w?28:22,fontWeight:900}}>{"\uD83D\uDD25"}{streakData.current_streak}</div>
+          <div style={{color:t.kl,fontSize:12,fontWeight:700,letterSpacing:2,marginTop:2}}>STREAK</div>
+          {streakData.longest_streak>0&&<div style={{color:t.tf,fontSize:10,marginTop:2}}>{"Best: "+streakData.longest_streak}</div>}
+          <button onClick={async()=>{setFreezeMsg("");const r=await db.freezeStreak(localDate());if(r.error){setFreezeMsg(r.error);setTimeout(()=>setFreezeMsg(""),3000);}else{setFreezeMsg("Frozen!");await loadStreak();setTimeout(()=>setFreezeMsg(""),3000);}}} style={{position:"absolute",top:6,right:6,background:t.gl,border:"1px solid "+t.bm,borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:12}} title="Freeze streak for today">{"\u2744\uFE0F"}</button>
+          {freezeMsg&&<div style={{color:freezeMsg.includes("!")?t.red:t.accent,fontSize:10,marginTop:4}}>{freezeMsg}</div>}
+        </div>
       </div>
 
       {noPlan&&<div style={{...s.c,border:"1px solid "+t.miB,background:t.miBg,textAlign:"center",padding:24}}>
@@ -353,26 +389,26 @@ function Dashboard({l,w,t,s,mode,toggleMode,onLogout}) {
         </div>
 
         {tab!=="b"&&<div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
-          {SHORT.map((d,i)=>{const isT=i===todayIdx()&&wk===getWeekId();return<button key={d} onClick={()=>setDay(i)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:isT?"1.5px solid "+t.accent:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===i?t.ds:"transparent",color:day===i?t.accent:t.di,fontWeight:day===i?700:400,boxShadow:isT?"0 0 12px "+t.ag:"none",transition:"all .2s"}}>
-            {d+" "}<span style={{fontSize:10,opacity:.5}}>{dayDate(wk,i)}</span>
+          {DISPLAY_SHORT.map((d,di)=>{const dbIdx=DISPLAY_ORDER[di];const isT=dbIdx===todayDbIdx()&&wk===getWeekId();return<button key={d} onClick={()=>setDay(di)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:isT?"1.5px solid "+t.accent:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===di?t.ds:"transparent",color:day===di?t.accent:t.di,fontWeight:day===di?700:400,boxShadow:isT?"0 0 12px "+t.ag:"none",transition:"all .2s"}}>
+            {d+" "}<span style={{fontSize:10,opacity:.5}}>{dayDate(wk,dbIdx)}</span>
           </button>;})}
           <button onClick={()=>setDay(-1)} style={{padding:w?"8px 14px":"6px 10px",borderRadius:10,border:"1px solid "+t.bm,cursor:"pointer",fontSize:w?13:12,fontFamily:"'Overpass Mono',monospace",background:day===-1?t.ds:"transparent",color:day===-1?t.accent:t.di,fontWeight:day===-1?700:400}}>ALL</button>
         </div>}
 
         {tab==="w"&&(day===-1
-          ?wp.map((p,i)=><WDay key={i} plan={{...p,day:DAYS[i]}} log={woLogs[i]||{}} onLogChange={d=>updateWoLog(i,d)} s={s} l={l} t={t}/>)
-          :wp[day]?<WDay plan={{...wp[day],day:DAYS[day]}} log={woLogs[day]||{}} onLogChange={d=>updateWoLog(day,d)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No plan for this day</div>
+          ?DISPLAY_ORDER.map((dbIdx,di)=>wp[dbIdx]?<WDay key={di} plan={{...wp[dbIdx],day:DAYS[dbIdx]}} log={woLogs[dbIdx]||{}} onLogChange={d=>updateWoLog(dbIdx,d)} s={s} l={l} t={t}/>:null)
+          :wp[DISPLAY_ORDER[day]]?<WDay plan={{...wp[DISPLAY_ORDER[day]],day:DAYS[DISPLAY_ORDER[day]]}} log={woLogs[DISPLAY_ORDER[day]]||{}} onLogChange={d=>updateWoLog(DISPLAY_ORDER[day],d)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No plan for this day</div>
         )}
         {tab==="m"&&(day===-1
-          ?mp.map((p,i)=><MDay key={i} planned={p.meals||[]} logged={mlLogs[i]?.meals} onLogChange={m=>updateMlLog(i,m)} s={s} l={l} t={t}/>)
-          :mp[day]?<MDay planned={mp[day].meals||[]} logged={mlLogs[day]?.meals} onLogChange={m=>updateMlLog(day,m)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No meal plan for this day</div>
+          ?DISPLAY_ORDER.map((dbIdx,di)=>mp[dbIdx]?<MDay key={di} planned={mp[dbIdx].meals||[]} logged={mlLogs[dbIdx]?.meals} onLogChange={m=>updateMlLog(dbIdx,m)} s={s} l={l} t={t}/>:null)
+          :mp[DISPLAY_ORDER[day]]?<MDay planned={mp[DISPLAY_ORDER[day]].meals||[]} logged={mlLogs[DISPLAY_ORDER[day]]?.meals} onLogChange={m=>updateMlLog(DISPLAY_ORDER[day],m)} s={s} l={l} t={t}/>:<div style={{color:t.tf,padding:20}}>No meal plan for this day</div>
         )}
         {tab==="b"&&<Body data={meas} onChange={updateMeas} s={s} l={l} t={t}/>}
       </>}
 
       <div style={{display:"flex",justifyContent:"center",gap:w?16:10,marginTop:w?28:20,paddingTop:14,borderTop:"1px solid "+t.bf}}>
         <button onClick={()=>{const d=new Date(wk+"T12:00:00");d.setDate(d.getDate()-7);setWk(getWeekId(d));}} style={s.bg}>Prev</button>
-        <button onClick={()=>{setWk(getWeekId());setDay(todayIdx());}} style={{...s.bg,color:t.accent,borderColor:t.accent,boxShadow:"0 0 12px "+t.ag}}>This Week</button>
+        <button onClick={()=>{setWk(getWeekId());setDay(todayDisplayIdx());}} style={{...s.bg,color:t.accent,borderColor:t.accent,boxShadow:"0 0 12px "+t.ag}}>This Week</button>
         <button onClick={()=>{const d=new Date(wk+"T12:00:00");d.setDate(d.getDate()+7);setWk(getWeekId(d));}} style={s.bg}>Next</button>
       </div>
     </div>

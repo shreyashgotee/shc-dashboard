@@ -192,4 +192,92 @@ export const db = {
     });
     return (await iRes.json())?.[0] || null;
   },
+
+  // ─── STREAK TRACKER ───
+  async getStreak() {
+    const id = uid();
+    if (!id) return null;
+    const res = await fetch(api(`streak_tracker?user_id=eq.${id}&select=*`), { headers: getHeaders() });
+    const data = await res.json();
+    return Array.isArray(data) && data.length > 0 ? data[0] : null;
+  },
+
+  async updateStreak(localDate) {
+    const id = uid();
+    if (!id) return null;
+    let row = await this.getStreak();
+    const today = localDate; // "YYYY-MM-DD" from browser
+
+    if (!row) {
+      // First ever activity
+      const res = await fetch(api('streak_tracker'), {
+        method: 'POST', headers: getHeaders('return=representation'),
+        body: JSON.stringify({ user_id: id, current_streak: 1, longest_streak: 1, last_activity_date: today }),
+      });
+      return (await res.json())?.[0] || null;
+    }
+
+    const last = row.last_activity_date;
+    if (last === today) return row; // Already logged today
+
+    // Calculate days between last activity and today
+    const lastDate = new Date(last + "T12:00:00");
+    const todayDate = new Date(today + "T12:00:00");
+    const diffDays = Math.round((todayDate - lastDate) / 86400000);
+
+    let newStreak;
+    if (diffDays === 1) {
+      // Yesterday — streak continues
+      newStreak = row.current_streak + 1;
+    } else if (diffDays === 2 && row.last_freeze_date === last) {
+      // 2 days gap but yesterday was a freeze — streak continues
+      // Wait, freeze should be the gap day, not the last activity day
+      // If last_activity was 2 days ago, the gap day is yesterday
+      // Check if yesterday was frozen
+      const yesterday = new Date(todayDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().slice(0, 10);
+      if (row.last_freeze_date === yesterdayStr) {
+        newStreak = row.current_streak + 1;
+      } else {
+        newStreak = 1; // Streak broke
+      }
+    } else {
+      newStreak = 1; // Streak broke
+    }
+
+    const newLongest = Math.max(newStreak, row.longest_streak);
+    const res = await fetch(api(`streak_tracker?user_id=eq.${id}`), {
+      method: 'PATCH', headers: getHeaders('return=representation'),
+      body: JSON.stringify({ current_streak: newStreak, longest_streak: newLongest, last_activity_date: today }),
+    });
+    return (await res.json())?.[0] || null;
+  },
+
+  async freezeStreak(localDate) {
+    const id = uid();
+    if (!id) return { error: "Not logged in" };
+    let row = await this.getStreak();
+    if (!row) return { error: "No streak to freeze" };
+
+    const today = localDate;
+
+    // Can't freeze if already logged activity today
+    if (row.last_activity_date === today) return { error: "Already logged today, no need to freeze" };
+
+    // Can't freeze consecutive days
+    if (row.last_freeze_date) {
+      const lastFreeze = new Date(row.last_freeze_date + "T12:00:00");
+      const todayDate = new Date(today + "T12:00:00");
+      const diff = Math.round((todayDate - lastFreeze) / 86400000);
+      if (diff === 1) return { error: "Can't freeze consecutive days" };
+    }
+
+    const res = await fetch(api(`streak_tracker?user_id=eq.${id}`), {
+      method: 'PATCH', headers: getHeaders('return=representation'),
+      body: JSON.stringify({ last_freeze_date: today, freezes_used: (row.freezes_used || 0) + 1 }),
+    });
+    const data = await res.json();
+    return Array.isArray(data) && data.length > 0 ? data[0] : { error: "Failed to freeze" };
+  },
 };
